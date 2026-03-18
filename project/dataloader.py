@@ -36,7 +36,13 @@ class FER2013Dataset:
         expressions = {"angry": 0, "disgust": 1, "fear": 2, "happy": 3, "sad": 4, "surprise": 5, "neutral": 6}
         return expressions.get(expression, -1)
 
-    
+    def load_embeddings(self, split="train", expression="angry"):
+        embedding_path = f"embeddings_{split}_{expression}.npy"
+        if os.path.exists(embedding_path):
+            return np.load(embedding_path)
+        else:
+            print(f"Embedding file {embedding_path} does not exist.")
+            return None
 
 if __name__ == "__main__":
     dataset = FER2013Dataset()
