@@ -50,15 +50,15 @@ f1 = f1_score(y_true, preds, average='macro')
 report = classification_report(y_true, preds, target_names=["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"])
 import time
 
-date_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-print(f"Test results at {date_time}:")
-hour_minute = time.strftime("%H:%M", time.localtime())
+date_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+filename = f"test_results_{date_time}.txt"
+print(f"Test results at {date_time.replace('_', ' ')}:")
 # Save results
-with open(f"test_results_{hour_minute}.txt", "w") as f:
+with open(filename, "w") as f:
     f.write(f"Accuracy: {acc:.4f}\n")
     f.write(f"Recall (macro): {recall:.4f}\n")
     f.write(f"Precision (macro): {precision:.4f}\n")
     f.write(f"F1 (macro): {f1:.4f}\n\n")
     f.write(report)
 
-print("Test results saved to test_results.txt")
+print(f"Test results saved to {filename}")

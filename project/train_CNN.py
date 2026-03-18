@@ -4,39 +4,48 @@ import numpy as np
 from dataloader import FER2013Dataset
 from sklearn.model_selection import train_test_split
 
-class SimpleMLP(nn.Module):
-    def __init__(self, input_size, hidden_size, num_classes, dropout_rate=0.4):
-        super(SimpleMLP, self).__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.bn1 = nn.BatchNorm1d(hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.bn2 = nn.BatchNorm1d(hidden_size)
-        self.fc3 = nn.Linear(hidden_size, hidden_size // 2)
-        self.bn3 = nn.BatchNorm1d(hidden_size // 2)
-        self.fc4 = nn.Linear(hidden_size // 2, hidden_size // 4)
-        self.bn4 = nn.BatchNorm1d(hidden_size // 4)
-        self.fc5 = nn.Linear(hidden_size // 4, num_classes)
-        self.dropout = nn.Dropout(dropout_rate)
+class SimpleCNN(nn.Module):
+    def __init__(self, input_size, num_classes, dropout_rate=0.4):
+        super(SimpleCNN, self).__init__()
+        # Assume input_size=512, reshape to (1, 32, 16) for CNN (since 32*16=512)
+        self.input_channels = 1
+        self.height = 32
+        self.width = 16
+        self.conv1 = nn.Conv2d(self.input_channels, 32, kernel_size=3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn3 = nn.BatchNorm2d(128)
+        self.dropout = nn.Dropout2d(dropout_rate)
         self.act = nn.LeakyReLU()
+        self.pool = nn.AdaptiveAvgPool2d((2, 2))
+        self.fc1 = nn.Linear(128 * 2 * 2, 64)
+        self.bn_fc = nn.BatchNorm1d(64)
+        self.fc2 = nn.Linear(64, num_classes)
 
     def forward(self, x):
-        x = self.fc1(x)
+        # x shape: [batch, 512]
+        x = x.view(-1, self.input_channels, self.height, self.width)
+        x = self.conv1(x)
         x = self.bn1(x)
         x = self.act(x)
         x = self.dropout(x)
-        x = self.fc2(x)
+        x = self.conv2(x)
         x = self.bn2(x)
         x = self.act(x)
         x = self.dropout(x)
-        x = self.fc3(x)
+        x = self.conv3(x)
         x = self.bn3(x)
         x = self.act(x)
         x = self.dropout(x)
-        x = self.fc4(x)
-        x = self.bn4(x)
+        x = self.pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc1(x)
+        x = self.bn_fc(x)
         x = self.act(x)
         x = self.dropout(x)
-        x = self.fc5(x)
+        x = self.fc2(x)
         return x
 
 def smooth_labels(labels, num_classes, smoothing=0.1):
@@ -84,20 +93,19 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...")
-            torch.save(model.state_dict(), "best_model.pth")
+            torch.save(model.state_dict(), "best_model_cnn.pth")
 
     save_path = "model.pth"
     torch.save(model.state_dict(), save_path)
 
 if __name__ == "__main__":
     input_size = 512  # Example input size (e.g., from a feature extractor)
-    hidden_size = 256
     num_classes = 7  # Number of emotion classes
     dropout_rate = 0.5
     random_seed = 42
     torch.manual_seed(random_seed)
 
-    model = SimpleMLP(input_size, hidden_size, num_classes, dropout_rate)
+    model = SimpleCNN(input_size, num_classes, dropout_rate)
 
     # Load embeddings and labels
     dataset = FER2013Dataset()
