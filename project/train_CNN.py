@@ -105,7 +105,11 @@ if __name__ == "__main__":
     random_seed = 42
     torch.manual_seed(random_seed)
 
+    # Set device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     model = SimpleCNN(input_size, num_classes, dropout_rate)
+    model.to(device)
 
     # Load embeddings and labels
     dataset = FER2013Dataset()
@@ -133,6 +137,12 @@ if __name__ == "__main__":
     y_train_tensor = torch.tensor(y_train, dtype=torch.float32)  # Ensure float32 for KLDivLoss
     X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
     y_val_tensor = torch.tensor(y_val, dtype=torch.float32)      # Ensure float32 for KLDivLoss
+
+    # Move tensors to device
+    X_train_tensor = X_train_tensor.to(device)
+    y_train_tensor = y_train_tensor.to(device)
+    X_val_tensor = X_val_tensor.to(device)
+    y_val_tensor = y_val_tensor.to(device)
 
     # Check shapes for debugging
     print('X_train_tensor shape:', X_train_tensor.shape)
