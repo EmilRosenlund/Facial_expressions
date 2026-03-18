@@ -2,6 +2,6 @@
 /fer2013.csv
 /fer2013_test.csv
 /fer2013
-*.npy
+
 *.pt
 *.pth
