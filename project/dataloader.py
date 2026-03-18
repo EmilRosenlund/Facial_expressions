@@ -37,7 +37,7 @@ class FER2013Dataset:
         return expressions.get(expression, -1)
 
     def load_embeddings(self, split="train", expression="angry"):
-        embedding_path = f"embeddings_{split}_{expression}.npy"
+        embedding_path = f"embeddings/embeddings_{split}_{expression}.npy"
         if os.path.exists(embedding_path):
             return np.load(embedding_path)
         else:

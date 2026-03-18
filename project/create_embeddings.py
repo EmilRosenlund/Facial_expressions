@@ -61,8 +61,8 @@ if __name__ == "__main__":
     from dataloader import FER2013Dataset
     dataset = FER2013Dataset()
     embedding_creator = create_embeddings()
-    for split in ["train", "test"]:
-        for expression in ["surprise", "neutral"]:
+    for split in ["test"]:
+        for expression in ["angry", "disgust", "sad", "surprise", "neutral"]:
             data = dataset.load_data(split=split, expression=expression)
             batch_size = 32
             all_embeddings = []
@@ -77,7 +77,8 @@ if __name__ == "__main__":
                     all_embeddings.append(embeddings.cpu().numpy())
                     batch = []
             all_embeddings = np.concatenate(all_embeddings, axis=0)
-            save_path = f"embeddings_{split}_{expression}.npy"
             os.makedirs("embeddings", exist_ok=True)
+            save_path = f"embeddings/embeddings_{split}_{expression}.npy"
+            
             np.save(save_path, all_embeddings)
             print(f"Saved embeddings for {split} set, {expression} expression to {save_path}.")

@@ -1,0 +1,125 @@
+===============================================================(1)
+MLP without dropout:
+train loss decreases, but it overfits:
+Epoch [55/200], Train Loss: 0.9625, Val Loss: 1.4997
+Epoch [56/200], Train Loss: 0.9600, Val Loss: 1.5095
+Epoch [57/200], Train Loss: 0.9578, Val Loss: 1.5055
+Epoch [58/200], Train Loss: 0.9534, Val Loss: 1.5225
+
+===============================================================(2)
+
+MLP with dropout 0.2
+traning still decreases and val follows a little, but still overfits:
+Epoch [55/200], Train Loss: 1.1629, Val Loss: 1.3932
+Epoch [56/200], Train Loss: 1.1574, Val Loss: 1.3923
+Epoch [57/200], Train Loss: 1.1532, Val Loss: 1.3929
+Epoch [58/200], Train Loss: 1.1516, Val Loss: 1.3916
+
+===============================================================(3)
+
+MLP with dropout 0.4
+training still decreases, val got below 1.38 but starts overfitting.
+Epoch [51/200], Train Loss: 1.2492, Val Loss: 1.3761
+Epoch [52/200], Train Loss: 1.2494, Val Loss: 1.3778
+Epoch [53/200], Train Loss: 1.2448, Val Loss: 1.3800
+Epoch [54/200], Train Loss: 1.2413, Val Loss: 1.3809
+Epoch [55/200], Train Loss: 1.2358, Val Loss: 1.3821
+Epoch [56/200], Train Loss: 1.2385, Val Loss: 1.3803
+
+===============================================================(4)
+
+MLP with dropout 0.6
+training still decreases, but val didn't fall below 1.39
+
+dropout no longer has an effect.
+
+===============================================================(5)
+
+MLP with dropout 0.4 and batch size 128
+a tiny bit better than (3)
+Epoch [46/200], Train Loss: 1.2836, Val Loss: 1.3773
+Epoch [47/200], Train Loss: 1.2768, Val Loss: 1.3777
+Epoch [48/200], Train Loss: 1.2733, Val Loss: 1.3785
+Epoch [49/200], Train Loss: 1.2738, Val Loss: 1.3784
+Epoch [50/200], Train Loss: 1.2705, Val Loss: 1.3807
+
+===============================================================(6)
+MLP with dropout 0.4 and batch size 128
+Added BatchNorm after each linear layer.
+A little better, but much more stable, takes longer to overfit
+Epoch [46/200], Train Loss: 1.2812, Val Loss: 1.3729
+Epoch [47/200], Train Loss: 1.2703, Val Loss: 1.3708
+Epoch [48/200], Train Loss: 1.2739, Val Loss: 1.3751
+Epoch [49/200], Train Loss: 1.2694, Val Loss: 1.3673 ****
+Epoch [50/200], Train Loss: 1.2634, Val Loss: 1.3742
+Epoch [51/200], Train Loss: 1.2631, Val Loss: 1.3723
+Epoch [52/200], Train Loss: 1.2689, Val Loss: 1.3736
+
+
+
+===============================================================(7)
+
+384  # Increased hidden size for better capacity
+No benefit
+
+===============================================================(8)
+added another hidden layer with BatchNorm and dropout aftereach fc.
+Slow convergence and around 1.38 again
+
+===============================================================(9)
+went back to (7)
+weight_decay=1e-4
+
+===============================================================(10)
+Label smoothing still no improvement
+
+
+
+===============================================================(11)
+Deeper MLP (4 layers), BatchNorm after each, LeakyReLU activations.
+Dropout rate set to 0.4.
+AdamW optimizer with stronger weight decay (5e-4).
+ReduceLROnPlateau learning rate scheduler.
+KLDivLoss with reduction='batchmean'.
+
+alot better:
+Epoch [388/400], Train Loss: 0.9425, Val Loss: 0.9963
+Epoch [389/400], Train Loss: 0.9372, Val Loss: 0.9961
+Epoch [390/400], Train Loss: 0.9362, Val Loss: 0.9960
+Epoch [391/400], Train Loss: 0.9370, Val Loss: 0.9966
+ def forward(self, x):
+        x = self.fc1(x)
+        x = self.bn1(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.bn2(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc3(x)
+        x = self.bn3(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc4(x)
+
+===============================================================(11)
+
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.bn1(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.bn2(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc3(x)
+        x = self.bn3(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc4(x)
+        x = self.bn4(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc5(x)
