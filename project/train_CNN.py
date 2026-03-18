@@ -62,11 +62,13 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
     for epoch in range(num_epochs):
         total_loss = 0
         for inputs, labels in train_loader:
+            inputs = inputs.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
             optimizer.zero_grad()
             outputs = model(inputs)
             outputs = torch.log_softmax(outputs, dim=1)
             # Apply class weights to the targets
-            weighted_labels = labels * class_weights_tensor.unsqueeze(0)  # [batch, num_classes]
+            weighted_labels = labels * class_weights_tensor.to(labels.device).unsqueeze(0)  # [batch, num_classes]
             loss = criterion(outputs, weighted_labels)
             loss.backward()
             optimizer.step()
@@ -78,9 +80,11 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         val_loss = 0
         with torch.no_grad():
             for val_inputs, val_labels in val_loader:
+                val_inputs = val_inputs.to(device, non_blocking=True)
+                val_labels = val_labels.to(device, non_blocking=True)
                 val_outputs = model(val_inputs)
                 val_outputs = torch.log_softmax(val_outputs, dim=1)
-                weighted_val_labels = val_labels * class_weights_tensor.unsqueeze(0)
+                weighted_val_labels = val_labels * class_weights_tensor.to(val_labels.device).unsqueeze(0)
                 loss = criterion(val_outputs, weighted_val_labels)
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
@@ -107,6 +111,13 @@ if __name__ == "__main__":
 
     # Set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+        torch.backends.cudnn.benchmark = True
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')  # For Apple Silicon (Mac M1/M2)
+    else:
+        device = torch.device('cpu')
 
     model = SimpleCNN(input_size, num_classes, dropout_rate)
     model.to(device)
