@@ -34,6 +34,7 @@ class FERDatasetTorch(Dataset):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
     transform = transforms.Compose([
         transforms.Resize((48, 48)),
         transforms.ToTensor(),
@@ -41,10 +42,12 @@ def main():
     ])
     train_dataset = FERDatasetTorch("fer2013", split="train", transform=transform)
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
+    print(f"Loaded {len(train_dataset)} training samples.")
     model = ExpressionClassifier().to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     num_epochs = 10
+    print("Starting training...")
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
