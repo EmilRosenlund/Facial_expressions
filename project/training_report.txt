@@ -202,3 +202,13 @@ Epoch 11/100, Train Loss: 1.1220, Val Loss: 1.1253
 # training a CNN from scratch
 
 Dropout 0.4 and weight_decay 5e-4
+
+Epoch 36/100, Train Loss: 0.9567, Val Loss: 1.0706
+Epoch 37/100, Train Loss: 0.9525, Val Loss: 1.0458
+Epoch 38/100, Train Loss: 0.9479, Val Loss: 1.0468
+Epoch 39/100, Train Loss: 0.9448, Val Loss: 1.0574
+Epoch 40/100, Train Loss: 0.9371, Val Loss: 1.0423
+Epoch 41/100, Train Loss: 0.9284, Val Loss: 1.0464
+Epoch 42/100, Train Loss: 0.9393, Val Loss: 1.0385
+Epoch 43/100, Train Loss: 0.9268, Val Loss: 1.0540
+Epoch 44/100, Train Loss: 0.9282, Val Loss: 1.0493

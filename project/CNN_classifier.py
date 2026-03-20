@@ -16,7 +16,7 @@ class ExpressionClassifier(nn.Module):
         self.conv4 = nn.Conv2d(256, 512, 3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
         self.dropout = nn.Dropout(0.4)
-        self.fc1 = nn.Linear(512 * 3 * 3, 256)
+        self.fc1 = nn.Linear(1472 * 3 * 3, 256)
         self.fc2 = nn.Linear(256, 7)
 
     def forward(self, x):
