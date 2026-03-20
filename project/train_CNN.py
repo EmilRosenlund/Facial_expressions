@@ -40,13 +40,21 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
     ])
-    train_dataset = FERDatasetTorch("fer2013", split="train", transform=transform)
+    # Load full training dataset
+    full_dataset = FERDatasetTorch("fer2013", split="train", transform=transform)
+    print(f"Loaded {len(full_dataset)} total training samples.")
+    # Create train/val split (e.g., 80% train, 20% val)
+    val_size = int(0.2 * len(full_dataset))
+    train_size = len(full_dataset) - val_size
+    train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
-    print(f"Loaded {len(train_dataset)} training samples.")
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
     model = ExpressionClassifier().to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
-    num_epochs = 10
+    num_epochs = 100
+        best_val_loss = float('inf')
+        best_epoch = -1
     print("Starting training...")
     for epoch in range(num_epochs):
         model.train()
@@ -60,7 +68,26 @@ def main():
             optimizer.step()
             running_loss += loss.item() * images.size(0)
         epoch_loss = running_loss / len(train_loader.dataset)
-        print(f"Epoch {epoch+1}/{num_epochs}, Loss: {epoch_loss:.4f}")
+
+        # Validation loss
+        model.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for images, labels in val_loader:
+                images, labels = images.to(device), labels.to(device)
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item() * images.size(0)
+        val_loss = val_loss / len(val_loader.dataset)
+
+            # Save best model
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_epoch = epoch + 1
+                torch.save(model.state_dict(), "best_expression_cnn.pth")
+
+        print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}")
+        # Save final model as well (optional)
     torch.save(model.state_dict(), "expression_cnn.pth")
     print("Training complete. Model saved as expression_cnn.pth")
 
