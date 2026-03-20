@@ -51,7 +51,7 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
     model = ExpressionClassifier().to(device)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4) # AdamW and stronger weight decay
     num_epochs = 100
     best_val_loss = float('inf')
     best_epoch = -1

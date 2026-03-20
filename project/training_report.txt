@@ -176,7 +176,24 @@ F1 (macro): 0.4249
    macro avg       0.42      0.47      0.42      7178
 weighted avg       0.46      0.46      0.45      7178
 
+===============================================================(12)
 
 
-# Switching to Simple CNN
+# training a CNN from scratch
 
+Dropout 0.4
+
+Using device: cuda
+Loaded 28709 total training samples.
+Starting training...
+Epoch 1/100, Train Loss: 1.7865, Val Loss: 1.6750
+Epoch 2/100, Train Loss: 1.6189, Val Loss: 1.5037
+Epoch 3/100, Train Loss: 1.4803, Val Loss: 1.3636
+Epoch 4/100, Train Loss: 1.3915, Val Loss: 1.3135
+Epoch 5/100, Train Loss: 1.3255, Val Loss: 1.2897
+Epoch 6/100, Train Loss: 1.2761, Val Loss: 1.2055
+Epoch 7/100, Train Loss: 1.2357, Val Loss: 1.1849
+Epoch 8/100, Train Loss: 1.2053, Val Loss: 1.1591
+Epoch 9/100, Train Loss: 1.1720, Val Loss: 1.1580
+Epoch 10/100, Train Loss: 1.1475, Val Loss: 1.1467
+Epoch 11/100, Train Loss: 1.1220, Val Loss: 1.1253
