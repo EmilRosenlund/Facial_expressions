@@ -6,3 +6,4 @@
 *.pt
 *.pth
 *.pyc
+/project/__pycache__/
