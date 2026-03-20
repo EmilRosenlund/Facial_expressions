@@ -9,7 +9,7 @@ import PIL.Image as Image
 
 class FER2013Dataset:
     def __init__(self, debug=True):
-        self.data_path = "fer2013" # relative path to the dataset folder
+        self.data_path = "/ceph/home/student.aau.dk/cu73wa/Facial_expressions/fer2013" # relative path to the dataset folder
         self.debug = debug
 
     def test(self):
