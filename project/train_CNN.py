@@ -53,8 +53,8 @@ def main():
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     num_epochs = 100
-        best_val_loss = float('inf')
-        best_epoch = -1
+    best_val_loss = float('inf')
+    best_epoch = -1
     print("Starting training...")
     for epoch in range(num_epochs):
         model.train()
@@ -80,16 +80,17 @@ def main():
                 val_loss += loss.item() * images.size(0)
         val_loss = val_loss / len(val_loader.dataset)
 
-            # Save best model
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_epoch = epoch + 1
-                torch.save(model.state_dict(), "best_expression_cnn.pth")
+        # Save best model
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_epoch = epoch + 1
+            torch.save(model.state_dict(), "best_expression_cnn.pth")
 
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}")
         # Save final model as well (optional)
     torch.save(model.state_dict(), "expression_cnn.pth")
     print("Training complete. Model saved as expression_cnn.pth")
+    print(f"Best epoch: {best_epoch} with validation loss: {best_val_loss:.4f}")
 
 if __name__ == "__main__":
     main()
