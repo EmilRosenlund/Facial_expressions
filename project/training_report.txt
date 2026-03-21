@@ -198,6 +198,8 @@ Epoch 9/100, Train Loss: 1.1720, Val Loss: 1.1580
 Epoch 10/100, Train Loss: 1.1475, Val Loss: 1.1467
 Epoch 11/100, Train Loss: 1.1220, Val Loss: 1.1253
 
+===============================================================(12)
+
 
 # training a CNN from scratch
 

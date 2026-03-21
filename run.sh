@@ -3,7 +3,7 @@
 #SBATCH --mem=24G
 #SBATCH --cpus-per-task=15
 #SBATCH --gres=gpu:1
-#SBATCH --time=01:00:00
+#SBATCH --time=03:00:00
 #SBATCH --output=out.txt
 #SBATCH --error=error.txt
 
