@@ -33,22 +33,29 @@ class FERDatasetTorch(Dataset):
         return image, label
 
 def main():
+    import time
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
     transform = transforms.Compose([
         transforms.Resize((48, 48)),
         transforms.ToTensor(),
         transforms.Normalize((0.5,), (0.5,))
     ])
-    # Load full training dataset
+    # Time dataset loading
+    t0 = time.time()
     full_dataset = FERDatasetTorch("fer2013", split="train", transform=transform)
-    print(f"Loaded {len(full_dataset)} total training samples.")
+    print(f"Loaded {len(full_dataset)} total training samples. (Took {time.time() - t0:.2f}s)")
     # Create train/val split (e.g., 80% train, 20% val)
     val_size = int(0.2 * len(full_dataset))
     train_size = len(full_dataset) - val_size
     train_dataset, val_dataset = torch.utils.data.random_split(full_dataset, [train_size, val_size])
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
+    # Try higher num_workers and larger batch size for speed
+    batch_size = 128
+    num_workers = min(8, os.cpu_count() or 2)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=(device.type=="cuda"))
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=(device.type=="cuda"))
     model = ExpressionClassifier().to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4) # AdamW and stronger weight decay
