@@ -57,6 +57,12 @@ def main():
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=(device.type=="cuda"))
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=(device.type=="cuda"))
     model = ExpressionClassifier().to(device)
+    # Print model parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Model has {total_params:,} parameters.")
+    print("Layer-wise parameter counts:")
+    for name, param in model.named_parameters():
+        print(f"  {name:40s} {param.numel():,}")
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4) # AdamW and stronger weight decay
     num_epochs = 100
