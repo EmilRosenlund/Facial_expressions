@@ -1,3 +1,20 @@
+class FocalLoss(nn.Module):
+    def __init__(self, gamma=2.0, alpha=None, reduction='mean'):
+        super(FocalLoss, self).__init__()
+        self.gamma = gamma
+        self.alpha = alpha
+        self.reduction = reduction
+
+    def forward(self, input, target):
+        ce_loss = nn.functional.cross_entropy(input, target, reduction='none', weight=self.alpha)
+        pt = torch.exp(-ce_loss)
+        focal_loss = (1 - pt) ** self.gamma * ce_loss
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -64,7 +81,7 @@ def main():
     print("Layer-wise parameter counts:")
     for name, param in model.named_parameters():
         print(f"  {name:40s} {param.numel():,}")
-    criterion = nn.CrossEntropyLoss()
+    criterion = FocalLoss(gamma=2.0)
     optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4) # AdamW and stronger weight decay
     num_epochs = 100
     best_val_loss = float('inf')
