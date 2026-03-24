@@ -34,6 +34,7 @@ class FERDatasetTorch(Dataset):
 
 def main():
     import time
+    day = time.strftime("%m-%d", time.localtime())
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     if device.type == "cuda":
@@ -97,11 +98,11 @@ def main():
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             best_epoch = epoch + 1
-            torch.save(model.state_dict(), "best_expression_cnn.pth")
+            torch.save(model.state_dict(), f"best_expression_cnn_{day}.pth")
 
         print(f"Epoch {epoch+1}/{num_epochs}, Train Loss: {epoch_loss:.4f}, Val Loss: {val_loss:.4f}")
         # Save final model as well (optional)
-    torch.save(model.state_dict(), "expression_cnn.pth")
+    torch.save(model.state_dict(), f"expression_cnn_{day}.pth")
     print("Training complete. Model saved as expression_cnn.pth")
     print(f"Best epoch: {best_epoch} with validation loss: {best_val_loss:.4f}")
 
