@@ -107,9 +107,9 @@ if __name__ == "__main__":
     dataset = FER2013Dataset()
     X = []
     y = []
+    split = "train"
     for expression, label in zip(["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"], range(num_classes)):
-        # Look for ResNet50-specific embedding files
-        embedding_path = f"embeddings/embeddings_resnet50_train_{expression}.npy"
+        embedding_path = f"embeddings_ResNet50/embeddings_{split}_{expression}.npy"
         if not os.path.exists(embedding_path):
             raise FileNotFoundError(f"ResNet50 embedding file not found: {embedding_path}")
         embeddings = np.load(embedding_path)
