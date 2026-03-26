@@ -176,7 +176,7 @@ F1 (macro): 0.4249
    macro avg       0.42      0.47      0.42      7178
 weighted avg       0.46      0.46      0.45      7178
 
-===============================================================(12)
+===============================================================(13)
 
 
 # training a CNN from scratch
@@ -198,7 +198,7 @@ Epoch 9/100, Train Loss: 1.1720, Val Loss: 1.1580
 Epoch 10/100, Train Loss: 1.1475, Val Loss: 1.1467
 Epoch 11/100, Train Loss: 1.1220, Val Loss: 1.1253
 
-===============================================================(12)
+===============================================================(14)
 
 
 # training a CNN from scratch
@@ -214,3 +214,19 @@ Epoch 41/100, Train Loss: 0.9284, Val Loss: 1.0464
 Epoch 42/100, Train Loss: 0.9393, Val Loss: 1.0385
 Epoch 43/100, Train Loss: 0.9268, Val Loss: 1.0540
 Epoch 44/100, Train Loss: 0.9282, Val Loss: 1.0493
+
+
+===============================================================(15)
+
+# Crossentropy
+
+
+===============================================================(16)
+
+# Focal loss
+
+Epoch 10/100, Train Loss: 1.2763, Val Loss: 1.2606
+Epoch 11/100, Train Loss: 1.2609, Val Loss: 1.2313
+Epoch 12/100, Train Loss: 1.2428, Val Loss: 1.2245
+Epoch 13/100, Train Loss: 1.2250, Val Loss: 1.2165
+Epoch 14/100, Train Loss: 1.2034, Val Loss: 1.2179
