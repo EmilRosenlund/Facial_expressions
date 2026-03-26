@@ -295,3 +295,18 @@ F1 (macro): 0.5266
     accuracy                           0.54     28712
    macro avg       0.53      0.53      0.53     28712
 weighted avg       0.54      0.54      0.54     28712
+
+
+===============================================================(18)
+
+ResNet50 + MLP + 3 x Aug 
+hidden dims 256 --> 128
+
+
+
+
+===============================================================(18)
+
+ResNet50 backbone with the last two blocks unfrozen, 
+and trains the full pipeline with a low learning rate 
+for the backbone and a higher one for the head.

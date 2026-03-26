@@ -1,15 +1,21 @@
+
 import torch
 import torch.nn as nn
+import torch.optim as optim
+import torchvision.models as models
+from torchvision import transforms
 import numpy as np
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
+from PIL import Image
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from dataloader import FER2013Dataset
-from sklearn.model_selection import train_test_split
+from torch.utils.data import Dataset, DataLoader
 
-class SimpleMLP(nn.Module):
+# MLP head for classification
+class MLPHead(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes, dropout_rate=0.4):
-        super(SimpleMLP, self).__init__()
+        super().__init__()
         self.fc1 = nn.Linear(input_size, hidden_size)
         self.bn1 = nn.BatchNorm1d(hidden_size)
         self.fc2 = nn.Linear(hidden_size, hidden_size)
@@ -42,6 +48,47 @@ class SimpleMLP(nn.Module):
         x = self.fc5(x)
         return x
 
+# Combined model: ResNet50 backbone + MLP head
+class ResNet50WithMLP(nn.Module):
+    def __init__(self, hidden_size, num_classes, dropout_rate=0.4):
+        super().__init__()
+        resnet = models.resnet50(weights='IMAGENET1K_V1')
+        # Unfreeze last two residual blocks (layer3, layer4)
+        for name, param in resnet.named_parameters():
+            param.requires_grad = False
+        for name, param in resnet.layer3.named_parameters():
+            param.requires_grad = True
+        for name, param in resnet.layer4.named_parameters():
+            param.requires_grad = True
+        self.backbone = nn.Sequential(*(list(resnet.children())[:-1]))  # Remove FC
+        self.head = MLPHead(2048, hidden_size, num_classes, dropout_rate)
+
+    def forward(self, x):
+        x = self.backbone(x)
+        x = x.view(x.size(0), -1)
+        x = self.head(x)
+        return x
+
+# Custom dataset for end-to-end training
+class FER2013ImageDataset(Dataset):
+    def __init__(self, split="train", transform=None):
+        self.dataset = FER2013Dataset(debug=False)
+        self.transform = transform
+        self.samples = []
+        for expression in ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]:
+            data = self.dataset.load_data(split=split, expression=expression)
+            for label, img in data:
+                self.samples.append((img.copy(), label))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        img, label = self.samples[idx]
+        if self.transform:
+            img = self.transform(img.convert('RGB'))
+        return img, label
+
 def smooth_labels(labels, num_classes, smoothing=0.1):
     with torch.no_grad():
         confidence = 1.0 - smoothing
@@ -50,18 +97,19 @@ def smooth_labels(labels, num_classes, smoothing=0.1):
         smoothed.scatter_(1, labels.unsqueeze(1), confidence)
     return smoothed
 
-def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, class_weights_tensor):
+
+def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device):
     best_val_loss = float('inf')
-    model.train()
+    model.to(device)
     for epoch in range(num_epochs):
+        model.train()
         total_loss = 0
         for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
             outputs = torch.log_softmax(outputs, dim=1)
-            # Apply class weights to the targets
-            weighted_labels = labels * class_weights_tensor.unsqueeze(0)  # [batch, num_classes]
-            loss = criterion(outputs, weighted_labels)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -72,16 +120,15 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         val_loss = 0
         with torch.no_grad():
             for val_inputs, val_labels in val_loader:
+                val_inputs, val_labels = val_inputs.to(device), val_labels.to(device)
                 val_outputs = model(val_inputs)
                 val_outputs = torch.log_softmax(val_outputs, dim=1)
-                weighted_val_labels = val_labels * class_weights_tensor.unsqueeze(0)
-                loss = criterion(val_outputs, weighted_val_labels)
+                loss = criterion(val_outputs, val_labels)
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
 
         print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
         scheduler.step(avg_val_loss)
-        model.train()
 
         # Save best checkpoint
         if avg_val_loss < best_val_loss:
@@ -92,77 +139,45 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
     save_path = "model.pth"
     torch.save(model.state_dict(), save_path)
 
+
 if __name__ == "__main__":
-    input_size = 2048  # ResNet50 embedding size
-    hidden_size = 128
-    num_classes = 7  # Number of emotion classes
+    hidden_size = 256
+    num_classes = 7
     dropout_rate = 0.5
     random_seed = 42
     torch.manual_seed(random_seed)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = SimpleMLP(input_size, hidden_size, num_classes, dropout_rate)
+    # Data transforms
+    transform = transforms.Compose([
+        transforms.Resize((160, 160)),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+    ])
 
-    # Load embeddings and labels
-    embeddings_dir = "embeddings"  # Directory where ResNet50 embeddings are stored (relative path)
-    dataset = FER2013Dataset()
-    X = []
-    y = []
-    split = "train"
-    for expression, label in zip(["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"], range(num_classes)):
-        embedding_path = f"embeddings_ResNet50/embeddings_{split}_{expression}.npy"
-        if not os.path.exists(embedding_path):
-            raise FileNotFoundError(f"ResNet50 embedding file not found: {embedding_path}")
-        embeddings = np.load(embedding_path)
-        print(f"Loaded embeddings for {expression}: shape {embeddings.shape}")
-        if embeddings.shape[1] != 2048:
-            raise ValueError(f"Embeddings for {expression} have shape {embeddings.shape}, expected (N, 2048)")
-        X.append(embeddings)
-        # Create smoothed labels for the whole batch
-        labels_tensor = torch.full((embeddings.shape[0],), label, dtype=torch.long)
-        smoothed = smooth_labels(labels_tensor, num_classes, smoothing=0.1)
-        y.append(smoothed.cpu().numpy())
-    X = np.concatenate(X, axis=0)
-    y = np.concatenate(y, axis=0)
+    # Datasets and loaders
+    full_train_dataset = FER2013ImageDataset(split="train", transform=transform)
+    val_split = 0.2
+    val_size = int(len(full_train_dataset) * val_split)
+    train_size = len(full_train_dataset) - val_size
+    train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(random_seed))
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
+    val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
 
-    # Split into train and validation sets (80% train, 20% val)
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    # Model
+    model = ResNet50WithMLP(hidden_size, num_classes, dropout_rate)
 
-    # Convert to torch tensors
-    X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
-    y_train_tensor = torch.tensor(y_train, dtype=torch.float32)  # Ensure float32 for KLDivLoss
-    X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
-    y_val_tensor = torch.tensor(y_val, dtype=torch.float32)      # Ensure float32 for KLDivLoss
+    # Loss (use label smoothing)
+    criterion = nn.CrossEntropyLoss()
 
-    # Check shapes for debugging
-    print('X_train_tensor shape:', X_train_tensor.shape)
-    print('y_train_tensor shape:', y_train_tensor.shape)
-    print('X_val_tensor shape:', X_val_tensor.shape)
-    print('y_val_tensor shape:', y_val_tensor.shape)
-
-    # Create DataLoaders
-    train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-    val_dataset = torch.utils.data.TensorDataset(X_val_tensor, y_val_tensor)
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=4096, shuffle=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=4096, shuffle=False)
-
-    # Calculate class weights for imbalance
-    class_counts = np.zeros(num_classes, dtype=np.int64)
-    for expression, label in zip(["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"], range(num_classes)):
-        embeddings = dataset.load_embeddings(split="train", expression=expression)
-        if embeddings is not None:
-            if embeddings.ndim == 3 and embeddings.shape[1] == 1:
-                embeddings = embeddings.squeeze(1)
-            class_counts[label] = embeddings.shape[0]
-    class_weights = 1.0 / (class_counts + 1e-6)
-    class_weights = class_weights / class_weights.sum() * num_classes
-    class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32)
-    print('Class counts:', class_counts)
-    print('Class weights:', class_weights)
-
-    # Training setup
-    criterion = nn.KLDivLoss(reduction='batchmean')  # Use batchmean for KLDivLoss
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=5e-4) # AdamW and stronger weight decay
+    # Optimizer: two parameter groups
+    backbone_params = list(model.backbone.parameters())
+    head_params = list(model.head.parameters())
+    optimizer = optim.AdamW([
+        {"params": backbone_params, "lr": 1e-5},
+        {"params": head_params, "lr": 1e-4}
+    ], weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
-    num_epochs = 200
+    num_epochs = 50
 
-    train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, class_weights_tensor)
+    train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device)
