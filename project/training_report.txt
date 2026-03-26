@@ -243,3 +243,55 @@ Epoch [41/200], Train Loss: 0.0523, Val Loss: 0.1607
 Epoch [42/200], Train Loss: 0.0415, Val Loss: 0.1612
 Epoch [43/200], Train Loss: 0.0443, Val Loss: 0.1721
 Epoch [44/200], Train Loss: 0.0431, Val Loss: 0.1638
+
+
+Accuracy: 0.5362
+Recall (macro): 0.5404
+Precision (macro): 0.4857
+F1 (macro): 0.4948
+
+              precision    recall  f1-score   support
+
+       angry       0.43      0.42      0.42       958
+     disgust       0.25      0.65      0.36       111
+        fear       0.47      0.28      0.35      1024
+       happy       0.76      0.72      0.74      1774
+         sad       0.44      0.40      0.42      1247
+    surprise       0.58      0.77      0.66       831
+     neutral       0.47      0.55      0.51      1233
+
+    accuracy                           0.54      7178
+   macro avg       0.49      0.54      0.49      7178
+weighted avg       0.54      0.54      0.53      7178
+
+===============================================================(18)
+
+ResNet50 + MLP + 3 x Aug
+
+Epoch [95/200], Train Loss: 0.0228, Val Loss: 0.0783
+Epoch [96/200], Train Loss: 0.0213, Val Loss: 0.0785
+Epoch [97/200], Train Loss: 0.0203, Val Loss: 0.0789
+Epoch [98/200], Train Loss: 0.0196, Val Loss: 0.0782
+Epoch [99/200], Train Loss: 0.0186, Val Loss: 0.0777
+New best model found at epoch 99 with val loss 0.0777. Saving model...
+Epoch [100/200], Train Loss: 0.0183, Val Loss: 0.0763
+New best model found at epoch 100 with val loss 0.0763. Sa
+
+Accuracy: 0.5402
+Recall (macro): 0.5315
+Precision (macro): 0.5254
+F1 (macro): 0.5266
+
+              precision    recall  f1-score   support
+
+       angry       0.41      0.48      0.44      3832
+     disgust       0.52      0.54      0.53       444
+        fear       0.43      0.33      0.37      4096
+       happy       0.75      0.70      0.72      7096
+         sad       0.42      0.44      0.43      4988
+    surprise       0.65      0.72      0.69      3324
+     neutral       0.49      0.52      0.50      4932
+
+    accuracy                           0.54     28712
+   macro avg       0.53      0.53      0.53     28712
+weighted avg       0.54      0.54      0.54     28712
