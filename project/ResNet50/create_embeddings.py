@@ -54,6 +54,9 @@ if __name__ == "__main__":
             transforms.Normalize([0.5], [0.5])
         ])            
 
+    import sys
+    import os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     from dataloader import FER2013Dataset
     dataset = FER2013Dataset()
     embedding_creator = create_resnet_embeddings()
