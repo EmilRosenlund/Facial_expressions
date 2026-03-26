@@ -23,9 +23,11 @@ class FER2013Dataset:
             count = 0
             for filename in os.listdir(dir):
                 if filename.endswith(".jpg"):
-                    img = Image.open(os.path.join(dir, filename))
-                    data.append((self.get_label(expression), img))
-                count +=1
+                    img_path = os.path.join(dir, filename)
+                    with Image.open(img_path) as img:
+                        img_converted = img.copy()  # Copy image data to memory, then close file
+                    data.append((self.get_label(expression), img_converted))
+                count += 1
                 if self.debug and count % 1000 == 0:
                     print(f"Loaded {count} images from {dir}...")
         else:
