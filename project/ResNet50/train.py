@@ -60,11 +60,13 @@ class ResNet50WithMLP(nn.Module):
             param.requires_grad = True
         for name, param in resnet.layer4.named_parameters():
             param.requires_grad = True
+        self.dropout = nn.Dropout(dropout_rate)
         self.backbone = nn.Sequential(*(list(resnet.children())[:-1]))  # Remove FC
         self.head = MLPHead(2048, hidden_size, num_classes, dropout_rate)
 
     def forward(self, x):
         x = self.backbone(x)
+        x = self.dropout(x)
         x = x.view(x.size(0), -1)
         x = self.head(x)
         return x
@@ -141,7 +143,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
 
 
 if __name__ == "__main__":
-    hidden_size = 256
+    hidden_size = 128
     num_classes = 7
     dropout_rate = 0.5
     random_seed = 42
