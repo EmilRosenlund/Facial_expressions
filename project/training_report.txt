@@ -230,3 +230,16 @@ Epoch 11/100, Train Loss: 1.2609, Val Loss: 1.2313
 Epoch 12/100, Train Loss: 1.2428, Val Loss: 1.2245
 Epoch 13/100, Train Loss: 1.2250, Val Loss: 1.2165
 Epoch 14/100, Train Loss: 1.2034, Val Loss: 1.2179
+
+
+===============================================================(17)
+ResNet50 + MLP 
+Epoch [37/200], Train Loss: 0.0759, Val Loss: 0.1950
+Epoch [38/200], Train Loss: 0.0667, Val Loss: 0.1759
+Epoch [39/200], Train Loss: 0.0561, Val Loss: 0.1550
+New best model found at epoch 39 with val loss 0.1550. Saving model...
+Epoch [40/200], Train Loss: 0.0548, Val Loss: 0.1582
+Epoch [41/200], Train Loss: 0.0523, Val Loss: 0.1607
+Epoch [42/200], Train Loss: 0.0415, Val Loss: 0.1612
+Epoch [43/200], Train Loss: 0.0443, Val Loss: 0.1721
+Epoch [44/200], Train Loss: 0.0431, Val Loss: 0.1638
