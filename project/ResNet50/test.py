@@ -3,49 +3,53 @@ import numpy as np
 from train import ResNet50WithMLP
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report
 import os
+from torchvision import transforms
+from dataloader import FER2013Dataset
+from PIL import Image
 
 # Model and data parameters
-input_size = 2048  # ResNet50 embedding size
-hidden_size = 128
+hidden_size = 256  # Should match training
 num_classes = 7
 model_path = "best_model.pth"
 
-# Load test embeddings and labels
-def load_resnet50_embeddings(split="test"):
-    X = []
-    y = []
+# Data transforms (must match training)
+transform = transforms.Compose([
+    transforms.Resize((160, 160)),
+    transforms.ToTensor(),
+    transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
+])
+
+# Load test images and labels
+def load_test_images():
+    dataset = FER2013Dataset(debug=False)
+    images = []
+    labels = []
     for expression, label in zip(["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"], range(num_classes)):
-        embedding_path = f"embeddings_ResNet50/embeddings_{split}_{expression}.npy"
-        if not os.path.exists(embedding_path):
-            print(f"Warning: {embedding_path} not found, skipping.")
-            continue
-        embeddings = np.load(embedding_path)
-        if embeddings.shape[1] != 2048:
-            raise ValueError(f"Embeddings for {expression} have shape {embeddings.shape}, expected (N, 2048)")
-        X.append(embeddings)
-        y.append(np.full(embeddings.shape[0], label))
-    if not X:
-        raise RuntimeError("No test embeddings found!")
-    X = np.concatenate(X, axis=0)
-    y = np.concatenate(y, axis=0)
-    return X, y
+        data = dataset.load_data(split="test", expression=expression)
+        for lbl, img in data:
+            images.append(transform(img.convert('RGB')))
+            labels.append(label)
+    return images, labels
 
-X_test, y_test = load_resnet50_embeddings(split="test")
-
-# Convert to torch tensors
-X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
-y_test_tensor = torch.tensor(y_test, dtype=torch.long)
+images, labels = load_test_images()
+X_test_tensor = torch.stack(images)
+y_test_tensor = torch.tensor(labels, dtype=torch.long)
 
 # Load model
 model = ResNet50WithMLP(hidden_size, num_classes)
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
 
-# Predict
+# Predict in batches (avoid OOM)
+batch_size = 64
+preds = []
 with torch.no_grad():
-    outputs = model(X_test_tensor)
-    preds = torch.argmax(outputs, dim=1).cpu().numpy()
-    y_true = y_test_tensor.cpu().numpy()
+    for i in range(0, len(X_test_tensor), batch_size):
+        batch = X_test_tensor[i:i+batch_size]
+        outputs = model(batch)
+    preds.append(torch.argmax(outputs, dim=1).cpu())
+preds = torch.cat(preds).numpy()
+y_true = y_test_tensor.cpu().numpy()
 
 print("Predicted classes:", np.unique(preds))
 
