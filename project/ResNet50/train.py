@@ -159,7 +159,7 @@ if __name__ == "__main__":
     # Training setup
     criterion = nn.KLDivLoss(reduction='batchmean')  # Use batchmean for KLDivLoss
     optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, weight_decay=5e-4) # AdamW and stronger weight decay
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     num_epochs = 200
 
     train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, class_weights_tensor)
