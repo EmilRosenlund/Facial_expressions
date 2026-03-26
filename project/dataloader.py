@@ -8,9 +8,10 @@ import numpy as np
 import PIL.Image as Image
 
 class FER2013Dataset:
-    def __init__(self, debug=True):
+    def __init__(self, debug=True, embeddings_dir="embeddings"):
         self.data_path = "/ceph/home/student.aau.dk/cu73wa/Facial_expressions/fer2013" # relative path to the dataset folder
         self.debug = debug
+        self.embeddings_dir = embeddings_dir
 
     def test(self):
         data = self.load_data(split="train", expression="angry")
@@ -39,7 +40,7 @@ class FER2013Dataset:
         return expressions.get(expression, -1)
 
     def load_embeddings(self, split="train", expression="angry"):
-        embedding_path = f"embeddings/embeddings_{split}_{expression}.npy"
+        embedding_path = f"{self.embeddings_dir}/embeddings_{split}_{expression}.npy"
         if os.path.exists(embedding_path):
             return np.load(embedding_path)
         else:
