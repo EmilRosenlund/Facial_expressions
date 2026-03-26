@@ -60,6 +60,21 @@ if __name__ == "__main__":
     from dataloader import FER2013Dataset
     dataset = FER2013Dataset()
     embedding_creator = create_resnet_embeddings()
+    import random
+    def augmentations(img):
+        # Squeeze (random horizontal/vertical scaling)
+        squeeze_factor = random.uniform(0.7, 1.0)
+        squeeze_img = img.resize((int(img.width * squeeze_factor), img.height))
+        squeeze_img = squeeze_img.resize((img.width, img.height))
+        # Rotate
+        rotate_img = img.rotate(random.uniform(-20, 20))
+        # Add Gaussian noise
+        np_img = np.array(img).astype(np.float32)
+        noise = np.random.normal(0, 10, np_img.shape)
+        noisy_img = np.clip(np_img + noise, 0, 255).astype(np.uint8)
+        noisy_img = Image.fromarray(noisy_img)
+        return [squeeze_img, rotate_img, noisy_img]
+
     for split in ["train", "test"]:
         for expression in ["angry", "disgust", "sad", "surprise", "neutral", "fear", "happy"]:
             data = dataset.load_data(split=split, expression=expression)
@@ -67,17 +82,26 @@ if __name__ == "__main__":
             all_embeddings = []
             batch = []
             for idx, (label, img) in enumerate(data):
-                preprocessed_img = preprocess(img.convert('RGB'))
-                batch.append(preprocessed_img)
-                if len(batch) == batch_size or idx == len(data) - 1:
-                    batch_tensor = torch.stack(batch)
-                    with torch.no_grad():
-                        embeddings = embedding_creator.get_embedding(batch_tensor)
-                    all_embeddings.append(embeddings.cpu().numpy())
-                    batch = []
+                imgs_to_embed = [img.convert('RGB')]
+                imgs_to_embed.extend(augmentations(img.convert('RGB')))
+                for aug_img in imgs_to_embed:
+                    preprocessed_img = preprocess(aug_img)
+                    batch.append(preprocessed_img)
+                    if len(batch) == batch_size:
+                        batch_tensor = torch.stack(batch)
+                        with torch.no_grad():
+                            embeddings = embedding_creator.get_embedding(batch_tensor)
+                        all_embeddings.append(embeddings.cpu().numpy())
+                        batch = []
+                if idx % 100 == 0:
+                    print(f"Processed {idx} images for {split} set, {expression} expression...")
+            if batch:
+                batch_tensor = torch.stack(batch)
+                with torch.no_grad():
+                    embeddings = embedding_creator.get_embedding(batch_tensor)
+                all_embeddings.append(embeddings.cpu().numpy())
             all_embeddings = np.concatenate(all_embeddings, axis=0)
             os.makedirs("embeddings_ResNet50", exist_ok=True)
             save_path = f"embeddings_ResNet50/embeddings_{split}_{expression}.npy"
-            
             np.save(save_path, all_embeddings)
             print(f"Saved embeddings for {split} set, {expression} expression to {save_path}.")

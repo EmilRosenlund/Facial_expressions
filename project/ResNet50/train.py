@@ -94,7 +94,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
 
 if __name__ == "__main__":
     input_size = 2048  # ResNet50 embedding size
-    hidden_size = 512
+    hidden_size = 256
     num_classes = 7  # Number of emotion classes
     dropout_rate = 0.5
     random_seed = 42
