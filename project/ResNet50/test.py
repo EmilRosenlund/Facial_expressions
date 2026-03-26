@@ -6,7 +6,7 @@ import os
 
 # Model and data parameters
 input_size = 2048  # ResNet50 embedding size
-hidden_size = 256
+hidden_size = 128
 num_classes = 7
 model_path = "best_model.pth"
 
