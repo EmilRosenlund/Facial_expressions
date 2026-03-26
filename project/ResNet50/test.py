@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from train import SimpleMLP
+from train import ResNet50WithMLP
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report
 import os
 
@@ -37,7 +37,7 @@ X_test_tensor = torch.tensor(X_test, dtype=torch.float32)
 y_test_tensor = torch.tensor(y_test, dtype=torch.long)
 
 # Load model
-model = SimpleMLP(input_size, hidden_size, num_classes)
+model = ResNet50WithMLP(hidden_size, num_classes)
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
 
