@@ -61,7 +61,7 @@ if __name__ == "__main__":
     dataset = FER2013Dataset()
     embedding_creator = create_resnet_embeddings()
     for split in ["train", "test"]:
-        for expression in ["angry"]:
+        for expression in ["angry", "disgust", "sad", "surprise", "neutral", "fear", "happy"]:
             data = dataset.load_data(split=split, expression=expression)
             batch_size = 32
             all_embeddings = []
