@@ -113,6 +113,9 @@ if __name__ == "__main__":
             # Squeeze extra dimension if present
             if embeddings.ndim == 3 and embeddings.shape[1] == 1:
                 embeddings = embeddings.squeeze(1)
+            print(f"Loaded embeddings for {expression}: shape {embeddings.shape}")
+            if embeddings.shape[1] != 2048:
+                raise ValueError(f"Embeddings for {expression} have shape {embeddings.shape}, expected (N, 2048)")
             X.append(embeddings)
             # Create smoothed labels for the whole batch
             labels_tensor = torch.full((embeddings.shape[0],), label, dtype=torch.long)
