@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))) 
 from dataloader import FER2013Dataset
 from sklearn.model_selection import train_test_split
 
