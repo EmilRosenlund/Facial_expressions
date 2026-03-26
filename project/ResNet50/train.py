@@ -108,19 +108,19 @@ if __name__ == "__main__":
     X = []
     y = []
     for expression, label in zip(["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"], range(num_classes)):
-        embeddings = dataset.load_embeddings(split="train", expression=expression)
-        if embeddings is not None:
-            # Squeeze extra dimension if present
-            if embeddings.ndim == 3 and embeddings.shape[1] == 1:
-                embeddings = embeddings.squeeze(1)
-            print(f"Loaded embeddings for {expression}: shape {embeddings.shape}")
-            if embeddings.shape[1] != 2048:
-                raise ValueError(f"Embeddings for {expression} have shape {embeddings.shape}, expected (N, 2048)")
-            X.append(embeddings)
-            # Create smoothed labels for the whole batch
-            labels_tensor = torch.full((embeddings.shape[0],), label, dtype=torch.long)
-            smoothed = smooth_labels(labels_tensor, num_classes, smoothing=0.1)
-            y.append(smoothed.cpu().numpy())
+        # Look for ResNet50-specific embedding files
+        embedding_path = f"embeddings/embeddings_resnet50_train_{expression}.npy"
+        if not os.path.exists(embedding_path):
+            raise FileNotFoundError(f"ResNet50 embedding file not found: {embedding_path}")
+        embeddings = np.load(embedding_path)
+        print(f"Loaded embeddings for {expression}: shape {embeddings.shape}")
+        if embeddings.shape[1] != 2048:
+            raise ValueError(f"Embeddings for {expression} have shape {embeddings.shape}, expected (N, 2048)")
+        X.append(embeddings)
+        # Create smoothed labels for the whole batch
+        labels_tensor = torch.full((embeddings.shape[0],), label, dtype=torch.long)
+        smoothed = smooth_labels(labels_tensor, num_classes, smoothing=0.1)
+        y.append(smoothed.cpu().numpy())
     X = np.concatenate(X, axis=0)
     y = np.concatenate(y, axis=0)
 
