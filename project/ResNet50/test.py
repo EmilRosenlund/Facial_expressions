@@ -41,13 +41,14 @@ model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
 
 # Predict in batches (avoid OOM)
+
 batch_size = 64
 preds = []
 with torch.no_grad():
     for i in range(0, len(X_test_tensor), batch_size):
         batch = X_test_tensor[i:i+batch_size]
         outputs = model(batch)
-    preds.append(torch.argmax(outputs, dim=1).cpu())
+        preds.append(torch.argmax(outputs, dim=1).cpu())
 preds = torch.cat(preds).numpy()
 y_true = y_test_tensor.cpu().numpy()
 
