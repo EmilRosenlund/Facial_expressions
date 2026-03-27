@@ -157,14 +157,14 @@ if __name__ == "__main__":
     random_seed = 42
     torch.manual_seed(random_seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    print(f"Using device: {device}")
     # Data transforms
     transform = transforms.Compose([
         transforms.Resize((160, 160)),
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
-
+    print("Data transforms defined.")
     # Datasets and loaders
     full_train_dataset = FER2013ImageDataset(split="train", transform=transform)
     val_split = 0.2
@@ -173,11 +173,10 @@ if __name__ == "__main__":
     train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(random_seed))
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
-
+    print(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
     # Model
     model = VGGFace2WithMLP(hidden_size, num_classes, dropout_rate)
-
-    # Loss: Weighted CrossEntropy with label smoothing (inverse-frequency weights)
+    print(f"Model initialized. With VGGFace2 backbone and MLP head. and {sum(p.numel() for p in model.parameters())} parameters.")
     class_counts = torch.tensor([3832, 444, 4096, 7096, 4988, 3324, 4932], dtype=torch.float)
     weights = 1.0 / class_counts
     weights = weights / weights.sum() * len(class_counts)

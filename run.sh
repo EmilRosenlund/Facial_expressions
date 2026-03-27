@@ -6,6 +6,7 @@
 #SBATCH --time=03:00:00
 #SBATCH --output=out.txt
 #SBATCH --error=error.txt
+#SBATCH --exclude=ailab-l4-07
 
 IMAGE="/ceph/container/pytorch/pytorch_25.08.sif"
 VENV_BIND="/ceph/project/P8_DCASE/p8_face_env:/scratch/p8_face_env"
