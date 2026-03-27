@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision.models as models
+from facenet_pytorch import InceptionResnetV1
 from torchvision import transforms
 import numpy as np
 import sys
@@ -55,28 +55,25 @@ class MLPHead(nn.Module):
         x = self.fc5(x)
         return x
 
-# Combined model: ResNet50 backbone + MLP head
-class ResNet50WithMLP(nn.Module):
+
+# Combined model: VGGFace2 (InceptionResnetV1) backbone + MLP head
+class VGGFace2WithMLP(nn.Module):
     def __init__(self, hidden_size, num_classes, dropout_rate=0.4):
         super().__init__()
-        resnet = models.resnet50(weights='IMAGENET1K_V1')
-        # Unfreeze last three residual blocks (layer2, layer3, layer4)
-        for name, param in resnet.named_parameters():
+        backbone = InceptionResnetV1(pretrained='vggface2')
+        # Unfreeze last blocks: last 2 mixed_6 and all mixed_7 layers
+        for name, param in backbone.named_parameters():
             param.requires_grad = False
-        for name, param in resnet.layer2.named_parameters():
-            param.requires_grad = True
-        for name, param in resnet.layer3.named_parameters():
-            param.requires_grad = True
-        for name, param in resnet.layer4.named_parameters():
-            param.requires_grad = True
+        for name, param in backbone.named_parameters():
+            if any([k in name for k in ["block8", "mixed_7", "mixed_6b", "mixed_6c"]]):
+                param.requires_grad = True
         self.dropout = nn.Dropout(dropout_rate)
-        self.backbone = nn.Sequential(*(list(resnet.children())[:-1]))  # Remove FC
-        self.head = MLPHead(2048, hidden_size, num_classes, dropout_rate)
+        self.backbone = backbone
+        self.head = MLPHead(512, hidden_size, num_classes, dropout_rate)
 
     def forward(self, x):
         x = self.backbone(x)
         x = self.dropout(x)
-        x = x.view(x.size(0), -1)
         x = self.head(x)
         return x
 
@@ -178,7 +175,7 @@ if __name__ == "__main__":
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
 
     # Model
-    model = ResNet50WithMLP(hidden_size, num_classes, dropout_rate)
+    model = VGGFace2WithMLP(hidden_size, num_classes, dropout_rate)
 
     # Loss: Weighted CrossEntropy with label smoothing (inverse-frequency weights)
     class_counts = torch.tensor([3832, 444, 4096, 7096, 4988, 3324, 4932], dtype=torch.float)

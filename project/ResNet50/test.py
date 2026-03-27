@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from train import ResNet50WithMLP
+from train import VGGFace2WithMLP
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report
 import os
 from torchvision import transforms
@@ -36,7 +36,7 @@ X_test_tensor = torch.stack(images)
 y_test_tensor = torch.tensor(labels, dtype=torch.long)
 
 # Load model
-model = ResNet50WithMLP(hidden_size, num_classes)
+model = VGGFace2WithMLP(hidden_size, num_classes)
 model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
 model.eval()
 
