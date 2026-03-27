@@ -335,3 +335,27 @@ weighted avg       0.52      0.51      0.51     28712
 ResNet50 backbone with the last two blocks unfrozen, 
 and trains the full pipeline with a low learning rate 
 for the backbone and a higher one for the head.
+
+Accuracy: 0.5507
+Recall (macro): 0.4610
+Precision (macro): 0.4497
+F1 (macro): 0.4481
+
+              precision    recall  f1-score   support
+
+       angry       0.35      0.36      0.35       958
+     disgust       0.00      0.00      0.00       111
+        fear       0.40      0.20      0.26      1024
+       happy       0.82      0.77      0.79      1774
+         sad       0.43      0.51      0.46      1247
+    surprise       0.67      0.77      0.71       831
+     neutral       0.49      0.63      0.55      1233
+
+    accuracy                           0.55      7178
+   macro avg       0.45      0.46      0.45      7178
+weighted avg       0.54      0.55      0.54      7178
+
+===============================================================(19)
+
+
+label smoothing + unfreeze one more layer

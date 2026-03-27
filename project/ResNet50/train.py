@@ -1,4 +1,5 @@
 
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -11,6 +12,12 @@ from PIL import Image
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from dataloader import FER2013Dataset
 from torch.utils.data import Dataset, DataLoader
+
+def mixup_batch(inputs, labels, alpha=0.3):
+    lam = np.random.beta(alpha, alpha)
+    idx = torch.randperm(inputs.size(0)).to(inputs.device)
+    mixed = lam * inputs + (1 - lam) * inputs[idx]
+    return mixed, labels, labels[idx], lam
 
 # MLP head for classification
 class MLPHead(nn.Module):
@@ -53,9 +60,11 @@ class ResNet50WithMLP(nn.Module):
     def __init__(self, hidden_size, num_classes, dropout_rate=0.4):
         super().__init__()
         resnet = models.resnet50(weights='IMAGENET1K_V1')
-        # Unfreeze last two residual blocks (layer3, layer4)
+        # Unfreeze last three residual blocks (layer2, layer3, layer4)
         for name, param in resnet.named_parameters():
             param.requires_grad = False
+        for name, param in resnet.layer2.named_parameters():
+            param.requires_grad = True
         for name, param in resnet.layer3.named_parameters():
             param.requires_grad = True
         for name, param in resnet.layer4.named_parameters():
@@ -109,9 +118,11 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
-            outputs = model(inputs)
-            outputs = torch.log_softmax(outputs, dim=1)
-            loss = criterion(outputs, labels)
+            # MixUp augmentation
+            mixed_inputs, labels_a, labels_b, lam = mixup_batch(inputs, labels)
+            outputs = model(mixed_inputs)
+            # No log_softmax here, CrossEntropyLoss expects logits
+            loss = lam * criterion(outputs, labels_a) + (1 - lam) * criterion(outputs, labels_b)
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -169,15 +180,21 @@ if __name__ == "__main__":
     # Model
     model = ResNet50WithMLP(hidden_size, num_classes, dropout_rate)
 
-    # Loss (use label smoothing)
-    criterion = nn.CrossEntropyLoss()
+    # Loss: Weighted CrossEntropy with label smoothing (inverse-frequency weights)
+    class_counts = torch.tensor([3832, 444, 4096, 7096, 4988, 3324, 4932], dtype=torch.float)
+    weights = 1.0 / class_counts
+    weights = weights / weights.sum() * len(class_counts)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
 
     # Optimizer: two parameter groups
     backbone_params = list(model.backbone.parameters())
     head_params = list(model.head.parameters())
     optimizer = optim.AdamW([
-        {"params": backbone_params, "lr": 1e-5},
-        {"params": head_params, "lr": 1e-4}
+    {"params": model.backbone[:6].parameters(), "lr": 0},   # frozen
+    {"params": model.backbone[6].parameters(), "lr": 1e-6}, # layer2
+    {"params": model.backbone[7].parameters(), "lr": 1e-5}, # layer3
+    {"params": model.backbone[8].parameters(), "lr": 1e-5}, # layer4
+    {"params": model.head.parameters(),        "lr": 1e-4},
     ], weight_decay=5e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     num_epochs = 50
