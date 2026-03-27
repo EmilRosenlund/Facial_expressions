@@ -196,6 +196,6 @@ if __name__ == "__main__":
         weight_decay=5e-4
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
-    num_epochs = 50
+    num_epochs = 130
 
     train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device)
