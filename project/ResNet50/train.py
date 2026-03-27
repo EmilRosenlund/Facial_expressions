@@ -183,16 +183,19 @@ if __name__ == "__main__":
     weights = weights / weights.sum() * len(class_counts)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
 
-    # Optimizer: two parameter groups
-    backbone_params = list(model.backbone.parameters())
-    head_params = list(model.head.parameters())
-    optimizer = optim.AdamW([
-    {"params": model.backbone[:6].parameters(), "lr": 0},   # frozen
-    {"params": model.backbone[6].parameters(), "lr": 1e-6}, # layer2
-    {"params": model.backbone[7].parameters(), "lr": 1e-5}, # layer3
-    {"params": model.backbone[8].parameters(), "lr": 1e-5}, # layer4
-    {"params": model.head.parameters(),        "lr": 1e-4},
-    ], weight_decay=5e-4)
+    # Optimizer: parameter groups for VGGFace2 backbone
+    # Unfrozen layers: block8, mixed_7, mixed_6b, mixed_6c
+    unfrozen_names = ["block8", "mixed_7", "mixed_6b", "mixed_6c"]
+    backbone_param_groups = [
+        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in unfrozen_names)], "lr": 1e-5},
+        {"params": [p for n, p in model.backbone.named_parameters() if not any(k in n for k in unfrozen_names)], "lr": 0},
+    ]
+    optimizer = optim.AdamW(
+        backbone_param_groups + [
+            {"params": model.head.parameters(), "lr": 1e-4}
+        ],
+        weight_decay=5e-4
+    )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     num_epochs = 50
 
