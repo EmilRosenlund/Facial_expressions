@@ -8,7 +8,7 @@
 #SBATCH --error=error.txt
 
 IMAGE="/ceph/container/pytorch/pytorch_25.08.sif"
-VENV_BIND="/ceph/project/P8_DCASE/p8_env:/scratch/p8_env"
+VENV_BIND="/ceph/project/P8_DCASE/p8_face_env:/scratch/p8_face_env"
 PROJECT="/ceph/project/P8_DCASE:/ceph/project/P8_DCASE"
 srun singularity exec --nv -B "$PROJECT" -B "$VENV_BIND" "$IMAGE" \
-    /scratch/p8_env/bin/python -u "$@"
+    /scratch/p8_face_env/bin/python -u "$@"
