@@ -8,7 +8,7 @@ from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_sc
 input_size = 512
 hidden_size = 256
 num_classes = 7
-model_path = "best_model.pth"
+model_path = "best_model_v2.pth"
 
 # Load test embeddings and labels
 
