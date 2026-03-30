@@ -66,7 +66,7 @@ class VGGFace2WithMLP(nn.Module):
         for name, param in backbone.named_parameters():
             param.requires_grad = False
         for name, param in backbone.named_parameters():
-            if any([k in name for k in ["block8", "mixed_7", "mixed_6b", "mixed_6c"]]):
+            if any([k in name for k in ["block8", "mixed_7a", "mixed_6a"]]):
                 param.requires_grad = True
         self.dropout = nn.Dropout(dropout_rate)
         self.backbone = backbone
@@ -202,8 +202,12 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
 
     # Optimizer: parameter groups for VGGFace2 backbone
-    # Unfrozen layers: block8, mixed_7, mixed_6b, mixed_6c
-    unfrozen_names = ["block8", "mixed_7", "mixed_6b", "mixed_6c"]
+    # Unfrozen layers: block8, mixed_7a, mixed_6a
+    unfrozen_names = ["block8", "mixed_7a", "mixed_6a"]
+    unfrozen_param_names = [n for n, p in model.backbone.named_parameters() if any(k in n for k in unfrozen_names)]
+    print("[DEBUG] Backbone parameters set to requires_grad=True:")
+    for n in unfrozen_param_names:
+        print("  ", n)
     backbone_param_groups = [
         {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in unfrozen_names)], "lr": 1e-5},
         {"params": [p for n, p in model.backbone.named_parameters() if not any(k in n for k in unfrozen_names)], "lr": 0},
