@@ -1,3 +1,4 @@
+import random
 
 
 import torch
@@ -79,14 +80,32 @@ class VGGFace2WithMLP(nn.Module):
 
 # Custom dataset for end-to-end training
 class FER2013ImageDataset(Dataset):
-    def __init__(self, split="train", transform=None):
+    def __init__(self, split="train", transform=None, augment=False):
         self.dataset = FER2013Dataset(debug=False)
         self.transform = transform
+        self.augment = augment
         self.samples = []
         for expression in ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]:
             data = self.dataset.load_data(split=split, expression=expression)
             for label, img in data:
                 self.samples.append((img.copy(), label))
+                # For training, add 3 augmentations per image
+                if self.augment and split == "train":
+                    for aug_img in self._augmentations(img.copy()):
+                        self.samples.append((aug_img, label))
+
+    def _augmentations(self, img):
+        # Squeeze (random horizontal scaling)
+        squeeze_factor = random.uniform(0.7, 1.0)
+        squeeze_img = img.resize((int(img.width * squeeze_factor), img.height)).resize((img.width, img.height))
+        # Rotate
+        rotate_img = img.rotate(random.uniform(-20, 20))
+        # Add Gaussian noise
+        np_img = np.array(img).astype(np.float32)
+        noise = np.random.normal(0, 10, np_img.shape)
+        noisy_img = np.clip(np_img + noise, 0, 255).astype(np.uint8)
+        noisy_img = Image.fromarray(noisy_img)
+        return [squeeze_img, rotate_img, noisy_img]
 
     def __len__(self):
         return len(self.samples)
@@ -165,8 +184,8 @@ if __name__ == "__main__":
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     print("Data transforms defined.")
-    # Datasets and loaders
-    full_train_dataset = FER2013ImageDataset(split="train", transform=transform)
+    # Datasets and loaders with 3x augmentation for training
+    full_train_dataset = FER2013ImageDataset(split="train", transform=transform, augment=True)
     val_split = 0.2
     val_size = int(len(full_train_dataset) * val_split)
     train_size = len(full_train_dataset) - val_size

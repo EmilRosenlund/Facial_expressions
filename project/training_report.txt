@@ -447,3 +447,22 @@ Epoch [54/300], Train Loss: 1.4728, Val Loss: 1.5143
 New best model found at epoch 54 with val loss 1.5143. Saving model...
 Epoch [55/300], Train Loss: 1.4549, Val Loss: 1.5228
 Epoch [56/300], Train Loss: 1.4818, Val Loss: 1.5194
+
+Accuracy: 0.6569
+Recall (macro): 0.6414
+Precision (macro): 0.6275
+F1 (macro): 0.6317
+
+              precision    recall  f1-score   support
+
+       angry       0.57      0.61      0.59       958
+     disgust       0.53      0.63      0.57       111
+        fear       0.52      0.40      0.45      1024
+       happy       0.92      0.83      0.87      1774
+         sad       0.50      0.56      0.52      1247
+    surprise       0.76      0.80      0.78       831
+     neutral       0.61      0.66      0.63      1233
+
+    accuracy                           0.66      7178
+   macro avg       0.63      0.64      0.63      7178
+weighted avg       0.66      0.66      0.66      7178
