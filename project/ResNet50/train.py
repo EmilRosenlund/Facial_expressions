@@ -162,8 +162,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         # Save best checkpoint
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v4")
-            torch.save(model.state_dict(), "best_model_v4.pth")
+            print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v5")
+            torch.save(model.state_dict(), "best_model_v5.pth")
 
     save_path = "model.pth"
     torch.save(model.state_dict(), save_path)
