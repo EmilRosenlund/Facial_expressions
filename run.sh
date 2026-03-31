@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-task=15
 #SBATCH --gres=gpu:1
 #SBATCH --time=12:00:00
-#SBATCH --output=out_v5.txt
+#SBATCH --output=out_v6.txt
 #SBATCH --error=error.txt
 #SBATCH --exclude=ailab-l4-07
 
