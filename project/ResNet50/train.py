@@ -66,7 +66,7 @@ class VGGFace2WithMLP(nn.Module):
         for name, param in backbone.named_parameters():
             param.requires_grad = False
         for name, param in backbone.named_parameters():
-            if any([k in name for k in ["block8", "mixed_7", "mixed_6b", "mixed_6c"]]):
+            if any([k in name for k in ["block8", "mixed_7a", "mixed_6a", "conv2d_4b", "conv2d_4a"]]):
                 param.requires_grad = True
         self.dropout = nn.Dropout(dropout_rate)
         self.backbone = backbone
@@ -162,8 +162,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         # Save best checkpoint
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...")
-            torch.save(model.state_dict(), "best_model_v2.pth")
+            print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v4")
+            torch.save(model.state_dict(), "best_model_v4.pth")
 
     save_path = "model.pth"
     torch.save(model.state_dict(), save_path)
@@ -201,12 +201,26 @@ if __name__ == "__main__":
     weights = weights / weights.sum() * len(class_counts)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
 
-    # Optimizer: parameter groups for VGGFace2 backbone
-    # Unfrozen layers: block8, mixed_7, mixed_6b, mixed_6c
-    unfrozen_names = ["block8", "mixed_7", "mixed_6b", "mixed_6c"]
+    # Optimizer: differential learning rates for backbone
+    # Early backbone (frozen): lr=0, mid backbone: lr=1e-5, last block: lr=1e-4
+    last_block_names = ["block8", "mixed_7a"]
+    mid_block_names = ["mixed_6a", "conv2d_4b", "conv2d_4a"]
+    # Group parameters
+    last_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in last_block_names)]
+    mid_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in mid_block_names) and not any(k in n for k in last_block_names)]
+    frozen_params = [p for n, p in model.backbone.named_parameters() if not any(k in n for k in (last_block_names + mid_block_names))]
+    print("[DEBUG] Last block params unfrozen:")
+    for n, p in model.backbone.named_parameters():
+        if any(k in n for k in last_block_names):
+            print("  ", n)
+    print("[DEBUG] Mid block params unfrozen:")
+    for n, p in model.backbone.named_parameters():
+        if any(k in n for k in mid_block_names) and not any(k in n for k in last_block_names):
+            print("  ", n)
     backbone_param_groups = [
-        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in unfrozen_names)], "lr": 1e-5},
-        {"params": [p for n, p in model.backbone.named_parameters() if not any(k in n for k in unfrozen_names)], "lr": 0},
+        {"params": frozen_params, "lr": 0},
+        {"params": mid_block_params, "lr": 1e-5},
+        {"params": last_block_params, "lr": 1e-4},
     ]
     optimizer = optim.AdamW(
         backbone_param_groups + [
