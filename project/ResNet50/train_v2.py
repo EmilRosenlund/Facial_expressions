@@ -162,8 +162,8 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         # Save best checkpoint
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
-            print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v5")
-            torch.save(model.state_dict(), "best_model_v5.pth")
+            print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v6")
+            torch.save(model.state_dict(), "best_model_v6.pth")
 
     save_path = "model.pth"
     torch.save(model.state_dict(), save_path)
@@ -190,13 +190,22 @@ if __name__ == "__main__":
     val_size = int(len(full_train_dataset) * val_split)
     train_size = len(full_train_dataset) - val_size
     train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(random_seed))
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
+    # Per-class oversampling using WeightedRandomSampler
+    from torch.utils.data import WeightedRandomSampler
+    # Get class counts and sample weights
+    class_counts = torch.tensor([3995, 436, 4097, 7215, 4965, 4830, 3171], dtype=torch.float)
+    sample_weights = 1.0 / class_counts
+    # Assign weight to each sample in the train_dataset
+    train_labels = [label for _, label in train_dataset]
+    weights = [sample_weights[label] for label in train_labels]
+    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+    train_loader = DataLoader(train_dataset, batch_size=64, sampler=sampler, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
     print(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
     # Model
     model = VGGFace2WithMLP(hidden_size, num_classes, dropout_rate)
     print(f"Model initialized. With VGGFace2 backbone and MLP head. and {sum(p.numel() for p in model.parameters())} parameters.")
-    class_counts = torch.tensor([3995, 436, 4097, 7215, 4965, 4830, 3171], dtype=torch.float)
+    class_counts = torch.tensor([3832, 444, 4096, 7096, 4988, 3324, 4932], dtype=torch.float)
     weights = 1.0 / class_counts
     weights = weights / weights.sum() * len(class_counts)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
@@ -225,12 +234,12 @@ if __name__ == "__main__":
     backbone_param_groups = [
         {"params": first_block_params, "lr": 1e-6},
         {"params": mid_block_params, "lr": 1e-5},
-        {"params": last_block_params, "lr": 1e-4},
+        {"params": last_block_params, "lr": 5e-4},
         {"params": other_params, "lr": 0},
     ]
     optimizer = optim.AdamW(
         backbone_param_groups + [
-            {"params": model.head.parameters(), "lr": 1e-4}
+            {"params": model.head.parameters(), "lr": 5e-4}
         ],
         weight_decay=5e-4
     )
