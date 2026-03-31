@@ -491,3 +491,28 @@ F1 (macro): 0.6765
     accuracy                           0.69      7178
    macro avg       0.69      0.67      0.68      7178
 weighted avg       0.70      0.69      0.69      7178
+
+
+
+=============================
+
+with augmentation + unfreeze 4a and 4b
+
+Accuracy: 0.6974
+Recall (macro): 0.6697
+Precision (macro): 0.7117
+F1 (macro): 0.6845
+
+              precision    recall  f1-score   support
+
+       angry       0.61      0.65      0.63       958
+     disgust       0.89      0.59      0.71       111
+        fear       0.62      0.47      0.53      1024
+       happy       0.85      0.90      0.87      1774
+         sad       0.56      0.59      0.58      1247
+    surprise       0.80      0.83      0.82       831
+     neutral       0.65      0.67      0.66      1233
+
+    accuracy                           0.70      7178
+   macro avg       0.71      0.67      0.68      7178
+weighted avg       0.70      0.70      0.69      7178
