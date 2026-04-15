@@ -1,11 +1,12 @@
 import torch
 import numpy as np
 from train import VGGFace2WithMLP
-from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
 import os
 from torchvision import transforms
 from dataloader import FER2013Dataset
 from PIL import Image
+import matplotlib.pyplot as plt
 
 # Model and data parameters
 hidden_size = 128  # Should match training
@@ -66,14 +67,20 @@ import time
 
 date_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
 filename = f"test_results_{date_time}.txt"
-confusion_filename = f"confusion_table_{date_time}.csv"
+confusion_image_filename = f"confusion_matrix_{date_time}.png"
 print(f"Test results at {date_time.replace('_', ' ')}:")
 
-# Save confusion table as CSV
-with open(confusion_filename, "w") as f:
-    f.write("true\\pred," + ",".join(class_names) + "\\n")
-    for idx, row in enumerate(cm):
-        f.write(f"{class_names[idx]}," + ",".join(map(str, row)) + "\\n")
+# Save confusion matrix as image with class names on both axes
+fig, ax = plt.subplots(figsize=(8, 7))
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
+disp.plot(ax=ax, cmap="Blues", colorbar=True, values_format="d")
+ax.set_title("Confusion Matrix")
+ax.set_xlabel("Predicted Label")
+ax.set_ylabel("True Label")
+plt.xticks(rotation=45, ha="right")
+plt.tight_layout()
+plt.savefig(confusion_image_filename, dpi=300)
+plt.close(fig)
 
 # Save results
 with open(filename, "w") as f:
@@ -82,8 +89,6 @@ with open(filename, "w") as f:
     f.write(f"Precision (macro): {precision:.4f}\n")
     f.write(f"F1 (macro): {f1:.4f}\n\n")
     f.write(report)
-    f.write("\nConfusion Matrix:\n")
-    f.write(np.array2string(cm))
 
 print(f"Test results saved to {filename}")
-print(f"Confusion table saved to {confusion_filename}")
+print(f"Confusion matrix image saved to {confusion_image_filename}")
