@@ -62,12 +62,9 @@ class VGGFace2WithMLP(nn.Module):
     def __init__(self, hidden_size, num_classes, dropout_rate=0.4):
         super().__init__()
         backbone = InceptionResnetV1(pretrained='vggface2')
-        # Unfreeze last blocks: last 2 mixed_6 and all mixed_7 layers
-        for name, param in backbone.named_parameters():
-            param.requires_grad = True
-        """ for name, param in backbone.named_parameters():
-            if any([k in name for k in ["block8", "mixed_7a", "mixed_6a", "conv2d_4b", "conv2d_4a"]]):
-                param.requires_grad = True """
+        # Freeze the backbone by default; only the requested blocks will be unfrozen later.
+        for _, param in backbone.named_parameters():
+            param.requires_grad = False
         self.dropout = nn.Dropout(dropout_rate)
         self.backbone = backbone
         self.head = MLPHead(512, hidden_size, num_classes, dropout_rate)
@@ -210,37 +207,20 @@ if __name__ == "__main__":
     weights = weights / weights.sum() * len(class_counts)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
 
-    # Optimizer: differential learning rates for backbone, including first block
-    first_block_names = ["conv2d_1a", "conv2d_2a", "conv2d_2b"]
-    last_block_names = ["block8", "mixed_7a"]
-    mid_block_names = ["mixed_6a", "conv2d_4b", "conv2d_4a"]
-    # Group parameters
-    first_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in first_block_names)]
-    last_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in last_block_names)]
-    mid_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in mid_block_names) and not any(k in n for k in (last_block_names + first_block_names))]
-    other_params = [p for n, p in model.backbone.named_parameters() if not any(k in n for k in (first_block_names + last_block_names + mid_block_names))]
-    print("[DEBUG] First block params:")
-    for n, p in model.backbone.named_parameters():
-        if any(k in n for k in first_block_names):
-            print("  ", n)
-    print("[DEBUG] Mid block params:")
-    for n, p in model.backbone.named_parameters():
-        if any(k in n for k in mid_block_names) and not any(k in n for k in (last_block_names + first_block_names)):
-            print("  ", n)
-    print("[DEBUG] Last block params:")
-    for n, p in model.backbone.named_parameters():
-        if any(k in n for k in last_block_names):
-            print("  ", n)
+    # Unfreeze only 4a, 4b, mixed_6a, mixed_7a, and block8.
+    trainable_backbone_names = ["conv2d_4a", "conv2d_4b", "mixed_6a", "mixed_7a", "block8"]
+    for name, param in model.backbone.named_parameters():
+        if any(block in name for block in trainable_backbone_names):
+            param.requires_grad = True
+
+    # Group only the trainable backbone parameters.
     backbone_param_groups = [
-        {"params": first_block_params, "lr": 1e-6},
-        {"params": mid_block_params, "lr": 1e-5},
-        {"params": last_block_params, "lr": 5e-4},
-        {"params": other_params, "lr": 0},
+        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in ["conv2d_4a", "conv2d_4b"])], "lr": 1e-6},
+        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in ["mixed_6a"])], "lr": 1e-5},
+        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in ["mixed_7a", "block8"])], "lr": 5e-4},
     ]
     optimizer = optim.AdamW(
-        backbone_param_groups + [
-            {"params": model.head.parameters(), "lr": 5e-4}
-        ],
+        backbone_param_groups + [{"params": model.head.parameters(), "lr": 5e-4}],
         weight_decay=5e-4
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
