@@ -182,7 +182,9 @@ if __name__ == "__main__":
     ])
     print("Data transforms defined.")
     # Datasets and loaders with 3x augmentation for training
+    print("Building full training dataset...")
     full_train_dataset = FER2013ImageDataset(split="train", transform=transform, augment=True)
+    print(f"Loaded {len(full_train_dataset)} training samples before split.")
     val_split = 0.2
     val_size = int(len(full_train_dataset) * val_split)
     train_size = len(full_train_dataset) - val_size
@@ -193,7 +195,8 @@ if __name__ == "__main__":
     class_counts = torch.tensor([3995, 436, 4097, 7215, 4965, 4830, 3171], dtype=torch.float)
     sample_weights = 1.0 / class_counts
     # Assign weight to each sample in the train_dataset
-    train_labels = [label for _, label in train_dataset]
+    print("Collecting labels for sampler...")
+    train_labels = [full_train_dataset.samples[idx][1] for idx in train_dataset.indices]
     weights = [sample_weights[label] for label in train_labels]
     sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
     train_loader = DataLoader(train_dataset, batch_size=64, sampler=sampler, num_workers=2)
