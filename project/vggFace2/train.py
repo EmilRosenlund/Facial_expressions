@@ -172,7 +172,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
 if __name__ == "__main__":
     hidden_size = 128
     num_classes = 7
-    dropout_rate = 0.5
+    dropout_rate = 0.45
     random_seed = 42
     torch.manual_seed(random_seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
