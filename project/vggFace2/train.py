@@ -207,6 +207,7 @@ if __name__ == "__main__":
     # Group parameters
     last_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in last_block_names)]
     mid_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in mid_block_names) and not any(k in n for k in last_block_names)]
+    frozen_param_names = [n for n, _ in model.backbone.named_parameters() if not any(k in n for k in (last_block_names + mid_block_names))]
     frozen_params = [p for n, p in model.backbone.named_parameters() if not any(k in n for k in (last_block_names + mid_block_names))]
     print("[DEBUG] Last block params unfrozen:")
     for n, p in model.backbone.named_parameters():
@@ -218,7 +219,7 @@ if __name__ == "__main__":
             print("  ", n)
     print("[DEBUG] Frozen block params:")
     for n, p in model.backbone.named_parameters():
-        if any(k in n for k in frozen_params):
+        if n in frozen_param_names:
             print("  ", n)
 
     backbone_param_groups = [
