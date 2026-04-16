@@ -95,7 +95,7 @@ class FER2013ImageDataset(Dataset):
                     for aug_img in self._augmentations(img.copy()):
                         self.samples.append((aug_img, label))
         if stage2:
-            hard_labels = ["angry", "sad", "fear", "neutral", "happy"]
+            hard_labels = [0, 2, 4, 6]
             # Assuming self.samples is a list of (path/image, label)
             self.samples = [s for s in self.samples if s[1] in hard_labels]
             print(f"Stage 2 Filtered: {len(self.samples)} samples remaining.")
