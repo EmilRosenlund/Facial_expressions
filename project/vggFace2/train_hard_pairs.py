@@ -323,6 +323,8 @@ if __name__ == "__main__":
         epochs = 80
         model_for_stage2 = model.module if isinstance(model, DDP) else model
         model_for_stage2.dropout.p = 0.1
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.0, weight=weights.to(device))
+
         backbone_param_groups = [
         {"params": frozen_params, "lr": 0},
         {"params": mid_block_params, "lr": 1e-6},
