@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # Model and data parameters
 hidden_size = 128  # Should match training
 num_classes = 7
-model_path = "best_model_v5.pth"
+model_path = "best_model_v6.pth"
 
 # Data transforms (must match training)
 transform = transforms.Compose([
