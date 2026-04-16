@@ -94,6 +94,11 @@ class FER2013ImageDataset(Dataset):
                 if self.augment and split == "train":
                     for aug_img in self._augmentations(img.copy()):
                         self.samples.append((aug_img, label))
+        if stage2:
+            hard_labels = ["angry", "sad", "fear", "neutral", "happy"]
+            # Assuming self.samples is a list of (path/image, label)
+            self.samples = [s for s in self.samples if s[1] in hard_labels]
+            print(f"Stage 2 Filtered: {len(self.samples)} samples remaining.")
 
     def _augmentations(self, img):
         # Squeeze (random horizontal scaling)
@@ -115,12 +120,6 @@ class FER2013ImageDataset(Dataset):
         img, label = self.samples[idx]
         if self.transform:
             img = self.transform(img.convert('RGB'))
-
-        if stage2:
-            if label in hard_pairs:
-                return img, label
-            else:
-                return self.__getitem__(idx + 1)  # Skip non-hard pair samples
         return img, label
 
 def smooth_labels(labels, num_classes, smoothing=0.1):
@@ -177,18 +176,6 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
 
 
 if __name__ == "__main__":
-
-
-    hard_pairs = [
-        ("angry", "sad"),
-        ("fear", "angry"),
-        ("sad", "angry"),
-        ("sad", "fear"),
-        ("neutral", "sad"),
-        ("neutral", "happy"),
-    ]
-
-
     stage1 = False
     stage2 = True
 
@@ -269,7 +256,15 @@ if __name__ == "__main__":
     if stage2 == True:
         print("Starting Stage 2: Fine-tuning on hard pairs")
         epochs = 30
-        optimizer = optim.SGD(model.parameters(), lr=1e-5, momentum=0.9, weight_decay=5e-4)
+
+        backbone_param_groups = [
+        {"params": frozen_params, "lr": 0},
+        {"params": mid_block_params, "lr": 1e-6},
+        {"params": last_block_params, "lr": 1e-5},
+    ]
+        optimizer = optim.SGD(backbone_param_groups + [
+            {"params": model.head.parameters(), "lr": 1e-5}
+        ], momentum=0.9, weight_decay=5e-4)
         with torch.no_grad():
             model.load_state_dict(torch.load("best_model_v5.pth", map_location=device))
         # Create new dataset and loaders for hard pairs only
