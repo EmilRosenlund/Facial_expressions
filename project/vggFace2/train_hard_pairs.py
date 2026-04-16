@@ -336,7 +336,7 @@ if __name__ == "__main__":
             model_to_load = model.module if isinstance(model, DDP) else model
             model_to_load.load_state_dict(torch.load("best_model_v5.pth", map_location=device))
         # Reuse the same Stage 1 split and only filter it for hard classes.
-        hard_labels = {0, 2, 4, 6}
+        hard_labels = {0, 2, 4} # angry, fear, sad, neutral
         hard_train_indices = [
             idx for idx in train_dataset.indices
             if full_train_dataset.samples[idx][1] in hard_labels
