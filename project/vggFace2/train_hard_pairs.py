@@ -94,11 +94,7 @@ class FER2013ImageDataset(Dataset):
                 if self.augment and split == "train":
                     for aug_img in self._augmentations(img.copy()):
                         self.samples.append((aug_img, label))
-        if stage2:
-            hard_labels = [0, 2, 4, 6]
-            # Assuming self.samples is a list of (path/image, label)
-            self.samples = [s for s in self.samples if s[1] in hard_labels]
-            print(f"Stage 2 Filtered: {len(self.samples)} samples remaining.")
+        
 
     def _augmentations(self, img):
         # Squeeze (random horizontal scaling)
@@ -157,7 +153,6 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
             for val_inputs, val_labels in val_loader:
                 val_inputs, val_labels = val_inputs.to(device), val_labels.to(device)
                 val_outputs = model(val_inputs)
-                val_outputs = torch.log_softmax(val_outputs, dim=1)
                 loss = criterion(val_outputs, val_labels)
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
@@ -256,7 +251,7 @@ if __name__ == "__main__":
     if stage2 == True:
         print("Starting Stage 2: Fine-tuning on hard pairs")
         epochs = 30
-
+    
         backbone_param_groups = [
         {"params": frozen_params, "lr": 0},
         {"params": mid_block_params, "lr": 1e-6},
@@ -267,10 +262,19 @@ if __name__ == "__main__":
         ], momentum=0.9, weight_decay=5e-4)
         with torch.no_grad():
             model.load_state_dict(torch.load("best_model_v5.pth", map_location=device))
-        # Create new dataset and loaders for hard pairs only
-        hard_train_dataset = FER2013ImageDataset(split="train", transform=transform, augment=True, stage2=True)
+        # Reuse the same Stage 1 split and only filter it for hard classes.
+        hard_labels = {0, 2, 4, 6}
+        hard_train_indices = [
+            idx for idx in train_dataset.indices
+            if full_train_dataset.samples[idx][1] in hard_labels
+        ]
+        hard_val_indices = [
+            idx for idx in val_dataset.indices
+            if full_train_dataset.samples[idx][1] in hard_labels
+        ]
+        hard_train_dataset = torch.utils.data.Subset(full_train_dataset, hard_train_indices)
+        hard_val_dataset = torch.utils.data.Subset(full_train_dataset, hard_val_indices)
         hard_train_loader = DataLoader(hard_train_dataset, batch_size=64, shuffle=True, num_workers=2)
-        hard_val_dataset = FER2013ImageDataset(split="test", transform=transform, augment=False, stage2=True)
         hard_val_loader = DataLoader(hard_val_dataset, batch_size=64, shuffle=False, num_workers=2)
         print(f"Hard pair train dataset size: {len(hard_train_dataset)}, Hard pair val dataset size: {len(hard_val_dataset)}")
         train(model, hard_train_loader, hard_val_loader, criterion, optimizer, scheduler, epochs, device)

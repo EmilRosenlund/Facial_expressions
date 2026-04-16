@@ -5,7 +5,7 @@ train_losses = []
 val_losses = []
 epochs = []
 
-with open("training_log.txt", "r") as f:
+with open("newest_run.txt", "r") as f:
     for line in f:
         if "Epoch" in line and "Train Loss" in line and "Val Loss" in line:
             # Example line: Epoch [1/50], Train Loss: 1.2345, Val Loss: 1.5678

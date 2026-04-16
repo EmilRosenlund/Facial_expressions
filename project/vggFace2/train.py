@@ -151,7 +151,6 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
             for val_inputs, val_labels in val_loader:
                 val_inputs, val_labels = val_inputs.to(device), val_labels.to(device)
                 val_outputs = model(val_inputs)
-                val_outputs = torch.log_softmax(val_outputs, dim=1)
                 loss = criterion(val_outputs, val_labels)
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
