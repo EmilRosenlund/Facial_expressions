@@ -322,7 +322,7 @@ if __name__ == "__main__":
             print("Starting Stage 2: Fine-tuning on hard pairs")
         epochs = 30
         model_for_stage2 = model.module if isinstance(model, DDP) else model
-    
+        model_for_stage2.dropout.p = 0.3
         backbone_param_groups = [
         {"params": frozen_params, "lr": 0},
         {"params": mid_block_params, "lr": 1e-6},
