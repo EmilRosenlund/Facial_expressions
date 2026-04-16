@@ -13,7 +13,7 @@ hidden_size = 128  # Should match training
 num_classes = 7
 model_v5_path = "best_model_v5.pth"
 model_v6_path = "best_model_v6.pth"
-reroute_labels = {0, 2, 4}
+reroute_labels = {0, 2, 4, 6}  # angry, fear, sad, neutral
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Data transforms (must match training)
