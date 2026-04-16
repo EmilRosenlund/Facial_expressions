@@ -320,7 +320,7 @@ if __name__ == "__main__":
     if stage2 == True:
         if is_main_process(rank):
             print("Starting Stage 2: Fine-tuning on hard pairs")
-        epochs = 30
+        epochs = 45
         model_for_stage2 = model.module if isinstance(model, DDP) else model
         model_for_stage2.dropout.p = 0.3
         backbone_param_groups = [
