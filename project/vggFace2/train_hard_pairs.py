@@ -320,18 +320,18 @@ if __name__ == "__main__":
     if stage2 == True:
         if is_main_process(rank):
             print("Starting Stage 2: Fine-tuning on hard pairs")
-        epochs = 80
+        epochs = 100
         model_for_stage2 = model.module if isinstance(model, DDP) else model
         model_for_stage2.dropout.p = 0.1
         criterion = nn.CrossEntropyLoss(label_smoothing=0.0, weight=weights.to(device))
 
         backbone_param_groups = [
         {"params": frozen_params, "lr": 0},
-        {"params": mid_block_params, "lr": 1e-6},
-        {"params": last_block_params, "lr": 1e-5},
+        {"params": mid_block_params, "lr": 1e-5},
+        {"params": last_block_params, "lr": 1e-4},
     ]
         optimizer = optim.SGD(backbone_param_groups + [
-            {"params": model_for_stage2.head.parameters(), "lr": 1e-5}
+            {"params": model_for_stage2.head.parameters(), "lr": 1e-4}
         ], momentum=0.9, weight_decay=5e-4)
         scheduler_stage2 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
         with torch.no_grad():
