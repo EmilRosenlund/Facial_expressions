@@ -3,6 +3,7 @@ import random
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -88,6 +89,39 @@ class MLPHead(nn.Module):
         x = self.dropout(x)
         x = self.fc5(x)
         return x
+
+
+class ArcMarginProduct(nn.Module):
+    def __init__(self, in_features, out_features, s=30.0, m=0.50, easy_margin=False):
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.s = s
+        self.m = m
+        self.easy_margin = easy_margin
+        self.weight = nn.Parameter(torch.empty(out_features, in_features))
+        nn.init.xavier_uniform_(self.weight)
+
+        self.cos_m = np.cos(m)
+        self.sin_m = np.sin(m)
+        self.th = np.cos(np.pi - m)
+        self.mm = np.sin(np.pi - m) * m
+
+    def forward(self, embeddings, labels):
+        cosine = F.linear(F.normalize(embeddings), F.normalize(self.weight))
+        sine = torch.sqrt(torch.clamp(1.0 - cosine.pow(2), min=1e-9))
+        phi = cosine * self.cos_m - sine * self.sin_m
+
+        if self.easy_margin:
+            phi = torch.where(cosine > 0, phi, cosine)
+        else:
+            phi = torch.where(cosine > self.th, phi, cosine - self.mm)
+
+        one_hot = torch.zeros_like(cosine)
+        one_hot.scatter_(1, labels.view(-1, 1), 1.0)
+        logits = (one_hot * phi) + ((1.0 - one_hot) * cosine)
+        logits *= self.s
+        return logits
 
 
 # Combined model: VGGFace2 (InceptionResnetV1) backbone + MLP head
@@ -226,6 +260,110 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         torch.save(model_to_save.state_dict(), save_path)
 
 
+def train_arcface(model, arcface_head, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device, rank=0, distributed=False, train_sampler=None):
+    best_val_loss = float('inf')
+    model.to(device)
+    arcface_head.to(device)
+
+    for epoch in range(num_epochs):
+        if distributed and train_sampler is not None:
+            train_sampler.set_epoch(epoch)
+
+        model.train()
+        arcface_head.train()
+        total_loss = 0.0
+        train_batches = 0
+
+        for inputs, labels in train_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            optimizer.zero_grad()
+
+            captured = {}
+            model_ref = model.module if isinstance(model, DDP) else model
+
+            def capture_fc5_input(_, fc5_input):
+                captured["embeddings"] = fc5_input[0]
+
+            hook = model_ref.head.fc5.register_forward_pre_hook(capture_fc5_input)
+            _ = model(inputs)
+            hook.remove()
+
+            embeddings = captured["embeddings"]
+            logits = arcface_head(embeddings, labels)
+            loss = criterion(logits, labels)
+            loss.backward()
+            optimizer.step()
+
+            total_loss += loss.item()
+            train_batches += 1
+
+        if distributed:
+            train_stats = torch.tensor([total_loss, train_batches], dtype=torch.float64, device=device)
+            dist.all_reduce(train_stats, op=dist.ReduceOp.SUM)
+            avg_train_loss = (train_stats[0] / train_stats[1].clamp(min=1.0)).item()
+        else:
+            avg_train_loss = total_loss / max(1, train_batches)
+
+        model.eval()
+        arcface_head.eval()
+        val_loss = 0.0
+        val_batches = 0
+        with torch.no_grad():
+            for val_inputs, val_labels in val_loader:
+                val_inputs, val_labels = val_inputs.to(device), val_labels.to(device)
+
+                captured = {}
+                model_ref = model.module if isinstance(model, DDP) else model
+
+                def capture_fc5_input(_, fc5_input):
+                    captured["embeddings"] = fc5_input[0]
+
+                hook = model_ref.head.fc5.register_forward_pre_hook(capture_fc5_input)
+                _ = model(val_inputs)
+                hook.remove()
+
+                val_embeddings = captured["embeddings"]
+                val_logits = arcface_head(val_embeddings, val_labels)
+                loss = criterion(val_logits, val_labels)
+                val_loss += loss.item()
+                val_batches += 1
+
+        if distributed:
+            val_stats = torch.tensor([val_loss, val_batches], dtype=torch.float64, device=device)
+            dist.all_reduce(val_stats, op=dist.ReduceOp.SUM)
+            avg_val_loss = (val_stats[0] / val_stats[1].clamp(min=1.0)).item()
+        else:
+            avg_val_loss = val_loss / max(1, val_batches)
+
+        if is_main_process(rank):
+            print(f'[ArcFace] Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
+        scheduler.step(avg_val_loss)
+
+        if avg_val_loss < best_val_loss and is_main_process(rank):
+            best_val_loss = avg_val_loss
+            print(f"New best ArcFace model at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v6")
+            model_to_save = model.module if isinstance(model, DDP) else model
+            arcface_to_save = arcface_head.module if isinstance(arcface_head, DDP) else arcface_head
+            torch.save(
+                {
+                    "model_state_dict": model_to_save.state_dict(),
+                    "arcface_state_dict": arcface_to_save.state_dict(),
+                },
+                "best_model_v6_arcface.pth",
+            )
+
+    if is_main_process(rank):
+        model_to_save = model.module if isinstance(model, DDP) else model
+        arcface_to_save = arcface_head.module if isinstance(arcface_head, DDP) else arcface_head
+        torch.save(
+            {
+                "model_state_dict": model_to_save.state_dict(),
+                "arcface_state_dict": arcface_to_save.state_dict(),
+            },
+            "model_v6_arcface.pth",
+        )
+
+
 if __name__ == "__main__":
     stage1 = False
     stage2 = True
@@ -324,6 +462,20 @@ if __name__ == "__main__":
         model_for_stage2 = model.module if isinstance(model, DDP) else model
         model_for_stage2.dropout.p = 0.1
         criterion = nn.CrossEntropyLoss(label_smoothing=0.0, weight=weights.to(device))
+        arcface_margin_head = ArcMarginProduct(
+            in_features=hidden_size // 4,
+            out_features=num_classes,
+            s=30.0,
+            m=0.50,
+        )
+        if distributed:
+            arcface_margin_head = DDP(
+                arcface_margin_head.to(device),
+                device_ids=[local_rank] if device.type == "cuda" else None,
+                output_device=local_rank if device.type == "cuda" else None,
+            )
+        else:
+            arcface_margin_head = arcface_margin_head.to(device)
 
         backbone_param_groups = [
         {"params": frozen_params, "lr": 0},
@@ -331,7 +483,8 @@ if __name__ == "__main__":
         {"params": last_block_params, "lr": 1e-4},
     ]
         optimizer = optim.SGD(backbone_param_groups + [
-            {"params": model_for_stage2.head.parameters(), "lr": 1e-4}
+            {"params": model_for_stage2.head.parameters(), "lr": 1e-4},
+            {"params": arcface_margin_head.parameters(), "lr": 5e-4},
         ], momentum=0.9, weight_decay=5e-4)
         scheduler_stage2 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
         with torch.no_grad():
@@ -355,7 +508,20 @@ if __name__ == "__main__":
         hard_val_loader = DataLoader(hard_val_dataset, batch_size=64, shuffle=False, sampler=hard_val_sampler, num_workers=2, pin_memory=True)
         if is_main_process(rank):
             print(f"Hard pair train dataset size: {len(hard_train_dataset)}, Hard pair val dataset size: {len(hard_val_dataset)}")
-        train(model, hard_train_loader, hard_val_loader, criterion, optimizer, scheduler_stage2, epochs, device, rank=rank, distributed=distributed, train_sampler=hard_train_sampler)
+        train_arcface(
+            model,
+            arcface_margin_head,
+            hard_train_loader,
+            hard_val_loader,
+            criterion,
+            optimizer,
+            scheduler_stage2,
+            epochs,
+            device,
+            rank=rank,
+            distributed=distributed,
+            train_sampler=hard_train_sampler,
+        )
         if is_main_process(rank):
             print("Stage 2 training completed.")
 
