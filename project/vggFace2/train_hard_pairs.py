@@ -387,7 +387,7 @@ if __name__ == "__main__":
 
     hidden_size = 128
     num_classes = 7
-    dropout_rate = 0.4
+    dropout_rate = 0.6
     random_seed = 42
     torch.manual_seed(random_seed)
     distributed, rank, world_size, local_rank, device = setup_distributed()
