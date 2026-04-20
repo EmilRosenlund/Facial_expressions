@@ -376,8 +376,8 @@ def train_arcface(model, arcface_head, train_loader, val_loader, criterion, opti
 
 
 if __name__ == "__main__":
-    stage1 = False
-    stage2 = True
+    stage1 = True
+    stage2 = False
 
 
 
