@@ -484,7 +484,7 @@ if __name__ == "__main__":
             in_features=hidden_size // 4,
             out_features=num_classes,
             s=30.0,
-            m=0.50,
+            m=0.40,
         )
         if distributed:
             arcface_margin_head_stage1 = DDP(
