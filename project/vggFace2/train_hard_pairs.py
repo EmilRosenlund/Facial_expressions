@@ -260,7 +260,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         torch.save(model_to_save.state_dict(), save_path)
 
 
-def train_arcface(model, arcface_head, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device, rank=0, distributed=False, train_sampler=None):
+def train_arcface(model, arcface_head, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device, rank=0, distributed=False, train_sampler=None, use_mixup=False):
     best_val_loss = float('inf')
     model.to(device)
     arcface_head.to(device)
@@ -278,6 +278,12 @@ def train_arcface(model, arcface_head, train_loader, val_loader, criterion, opti
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
 
+            if use_mixup:
+                mixed_inputs, labels_a, labels_b, lam = mixup_batch(inputs, labels)
+                forward_inputs = mixed_inputs
+            else:
+                forward_inputs = inputs
+
             captured = {}
             model_ref = model.module if isinstance(model, DDP) else model
 
@@ -285,12 +291,17 @@ def train_arcface(model, arcface_head, train_loader, val_loader, criterion, opti
                 captured["embeddings"] = fc5_input[0]
 
             hook = model_ref.head.fc5.register_forward_pre_hook(capture_fc5_input)
-            _ = model(inputs)
+            _ = model(forward_inputs)
             hook.remove()
 
             embeddings = captured["embeddings"]
-            logits = arcface_head(embeddings, labels)
-            loss = criterion(logits, labels)
+            if use_mixup:
+                logits_a = arcface_head(embeddings, labels_a)
+                logits_b = arcface_head(embeddings, labels_b)
+                loss = lam * criterion(logits_a, labels_a) + (1 - lam) * criterion(logits_b, labels_b)
+            else:
+                logits = arcface_head(embeddings, labels)
+                loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
 
@@ -374,7 +385,7 @@ if __name__ == "__main__":
 
     hidden_size = 128
     num_classes = 7
-    dropout_rate = 0.40
+    dropout_rate = 0.4
     random_seed = 42
     torch.manual_seed(random_seed)
     distributed, rank, world_size, local_rank, device = setup_distributed()
@@ -436,22 +447,52 @@ if __name__ == "__main__":
         {"params": mid_block_params, "lr": 1e-5},
         {"params": last_block_params, "lr": 1e-4},
     ]
-    optimizer = optim.AdamW(
-        backbone_param_groups + [
-            {"params": model.head.parameters(), "lr": 1e-4}
-        ],
-        weight_decay=5e-4
-    )
-
     if distributed:
         model = DDP(model.to(device), device_ids=[local_rank] if device.type == "cuda" else None, output_device=local_rank if device.type == "cuda" else None)
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     num_epochs = 300
     if stage1 == True:
         if is_main_process(rank):
             print("Starting Stage 1: Training from scratch")
-        train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device, rank=rank, distributed=distributed, train_sampler=train_sampler)
+        model_for_stage1 = model.module if isinstance(model, DDP) else model
+        arcface_margin_head_stage1 = ArcMarginProduct(
+            in_features=hidden_size // 4,
+            out_features=num_classes,
+            s=30.0,
+            m=0.50,
+        )
+        if distributed:
+            arcface_margin_head_stage1 = DDP(
+                arcface_margin_head_stage1.to(device),
+                device_ids=[local_rank] if device.type == "cuda" else None,
+                output_device=local_rank if device.type == "cuda" else None,
+            )
+        else:
+            arcface_margin_head_stage1 = arcface_margin_head_stage1.to(device)
+
+        optimizer_stage1 = optim.AdamW(
+            backbone_param_groups + [
+                {"params": model_for_stage1.head.parameters(), "lr": 1e-4},
+                {"params": arcface_margin_head_stage1.parameters(), "lr": 5e-4},
+            ],
+            weight_decay=5e-4
+        )
+        scheduler_stage1 = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer_stage1, mode='min', factor=0.5, patience=5)
+        train_arcface(
+            model,
+            arcface_margin_head_stage1,
+            train_loader,
+            val_loader,
+            criterion,
+            optimizer_stage1,
+            scheduler_stage1,
+            num_epochs,
+            device,
+            rank=rank,
+            distributed=distributed,
+            train_sampler=train_sampler,
+            use_mixup=True,
+        )
 
     if is_main_process(rank):
         print("Training completed.")
