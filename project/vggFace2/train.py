@@ -85,7 +85,8 @@ class FER2013ImageDataset(Dataset):
         self.transform = transform
         self.augment = augment
         self.samples = []
-        for expression in ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]:
+        for expression in ["angry", "fear", "sad", "neutral"]:
+        #for expression in ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]:
             data = self.dataset.load_data(split=split, expression=expression)
             for label, img in data:
                 self.samples.append((img.copy(), label))

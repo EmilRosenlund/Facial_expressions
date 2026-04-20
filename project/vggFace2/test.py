@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # Model and data parameters
 hidden_size = 128  # Should match training
 num_classes = 7
-model_path = "best_model_v6.pth"
+model_path = "best_model_v6_arcface.pth"
 
 # Data transforms (must match training)
 transform = transforms.Compose([
@@ -38,7 +38,15 @@ y_test_tensor = torch.tensor(labels, dtype=torch.long)
 
 # Load model
 model = VGGFace2WithMLP(hidden_size, num_classes)
-model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
+if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+    state_dict = checkpoint["model_state_dict"]
+elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
+    state_dict = checkpoint["state_dict"]
+else:
+    state_dict = checkpoint
+
+model.load_state_dict(state_dict)
 model.eval()
 
 # Predict in batches (avoid OOM)
