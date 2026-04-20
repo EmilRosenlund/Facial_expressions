@@ -291,7 +291,7 @@ def train_arcface(model, arcface_head, train_loader, val_loader, criterion, opti
                 captured["embeddings"] = fc5_input[0]
 
             hook = model_ref.head.fc5.register_forward_pre_hook(capture_fc5_input)
-            _ = model(forward_inputs)
+            model_logits = model(forward_inputs)
             hook.remove()
 
             embeddings = captured["embeddings"]
@@ -302,6 +302,8 @@ def train_arcface(model, arcface_head, train_loader, val_loader, criterion, opti
             else:
                 logits = arcface_head(embeddings, labels)
                 loss = criterion(logits, labels)
+            # Keep original classifier params in the autograd graph for DDP while ArcFace drives learning.
+            loss = loss + 0.0 * model_logits.sum()
             loss.backward()
             optimizer.step()
 
@@ -330,7 +332,7 @@ def train_arcface(model, arcface_head, train_loader, val_loader, criterion, opti
                     captured["embeddings"] = fc5_input[0]
 
                 hook = model_ref.head.fc5.register_forward_pre_hook(capture_fc5_input)
-                _ = model(val_inputs)
+                model(val_inputs)
                 hook.remove()
 
                 val_embeddings = captured["embeddings"]
