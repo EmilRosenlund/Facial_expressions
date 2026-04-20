@@ -54,6 +54,16 @@ def mixup_batch(inputs, labels, alpha=0.3):
     mixed = lam * inputs + (1 - lam) * inputs[idx]
     return mixed, labels, labels[idx], lam
 
+
+def expand_augmented_indices(base_indices, augmentations_per_sample=3):
+    # Dataset stores each base sample followed by its augmentations.
+    block_size = augmentations_per_sample + 1
+    expanded = []
+    for base_idx in base_indices:
+        start_idx = base_idx * block_size
+        expanded.extend(range(start_idx, start_idx + block_size))
+    return expanded
+
 # MLP head for classification
 class MLPHead(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes, dropout_rate=0.4):
@@ -182,7 +192,7 @@ class FER2013ImageDataset(Dataset):
     def __getitem__(self, idx):
         img, label = self.samples[idx]
         if self.transform:
-            img = self.transform(img.convert('RGB'))
+            img = self.transform(img)
         return img, label
 
 def smooth_labels(labels, num_classes, smoothing=0.1):
@@ -396,17 +406,30 @@ if __name__ == "__main__":
     # Data transforms
     transform = transforms.Compose([
         transforms.Resize((160, 160)),
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     if is_main_process(rank):
         print("Data transforms defined.")
-    # Datasets and loaders with 3x augmentation for training
-    full_train_dataset = FER2013ImageDataset(split="train", transform=transform, augment=True)
+    # Build non-augmented base split first so validation never contains augmented images.
+    full_train_dataset_no_aug = FER2013ImageDataset(split="train", transform=transform, augment=False)
+    full_train_dataset_aug = FER2013ImageDataset(split="train", transform=transform, augment=True)
     val_split = 0.2
-    val_size = int(len(full_train_dataset) * val_split)
-    train_size = len(full_train_dataset) - val_size
-    train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(random_seed))
+    val_size = int(len(full_train_dataset_no_aug) * val_split)
+    train_size = len(full_train_dataset_no_aug) - val_size
+    base_train_dataset, base_val_dataset = torch.utils.data.random_split(
+        full_train_dataset_no_aug,
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(random_seed),
+    )
+
+    base_train_indices = list(base_train_dataset.indices)
+    base_val_indices = list(base_val_dataset.indices)
+    train_aug_indices = expand_augmented_indices(base_train_indices, augmentations_per_sample=3)
+
+    train_dataset = torch.utils.data.Subset(full_train_dataset_aug, train_aug_indices)
+    val_dataset = torch.utils.data.Subset(full_train_dataset_no_aug, base_val_indices)
     train_sampler = DistributedSampler(train_dataset, num_replicas=world_size, rank=rank, shuffle=True) if distributed else None
     val_sampler = DistributedSampler(val_dataset, num_replicas=world_size, rank=rank, shuffle=False) if distributed else None
     train_loader = DataLoader(train_dataset, batch_size=64, shuffle=(train_sampler is None), sampler=train_sampler, num_workers=2, pin_memory=True)
@@ -535,16 +558,18 @@ if __name__ == "__main__":
             model_to_load.load_state_dict(torch.load("best_model_v5.pth", map_location=device))
         # Reuse the same Stage 1 split and only filter it for hard classes.
         hard_labels = {0, 2, 4, 6} # angry, fear, sad, neutral
-        hard_train_indices = [
-            idx for idx in train_dataset.indices
-            if full_train_dataset.samples[idx][1] in hard_labels
+        hard_train_base_indices = [
+            idx for idx in base_train_indices
+            if full_train_dataset_no_aug.samples[idx][1] in hard_labels
         ]
-        hard_val_indices = [
-            idx for idx in val_dataset.indices
-            if full_train_dataset.samples[idx][1] in hard_labels
+        hard_val_base_indices = [
+            idx for idx in base_val_indices
+            if full_train_dataset_no_aug.samples[idx][1] in hard_labels
         ]
-        hard_train_dataset = torch.utils.data.Subset(full_train_dataset, hard_train_indices)
-        hard_val_dataset = torch.utils.data.Subset(full_train_dataset, hard_val_indices)
+        hard_train_aug_indices = expand_augmented_indices(hard_train_base_indices, augmentations_per_sample=3)
+
+        hard_train_dataset = torch.utils.data.Subset(full_train_dataset_aug, hard_train_aug_indices)
+        hard_val_dataset = torch.utils.data.Subset(full_train_dataset_no_aug, hard_val_base_indices)
         hard_train_sampler = DistributedSampler(hard_train_dataset, num_replicas=world_size, rank=rank, shuffle=True) if distributed else None
         hard_val_sampler = DistributedSampler(hard_val_dataset, num_replicas=world_size, rank=rank, shuffle=False) if distributed else None
         hard_train_loader = DataLoader(hard_train_dataset, batch_size=64, shuffle=(hard_train_sampler is None), sampler=hard_train_sampler, num_workers=2, pin_memory=True)

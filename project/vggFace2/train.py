@@ -113,7 +113,7 @@ class FER2013ImageDataset(Dataset):
     def __getitem__(self, idx):
         img, label = self.samples[idx]
         if self.transform:
-            img = self.transform(img.convert('RGB'))
+            img = self.transform(img)
         return img, label
 
 def smooth_labels(labels, num_classes, smoothing=0.1):
@@ -179,6 +179,7 @@ if __name__ == "__main__":
     # Data transforms
     transform = transforms.Compose([
         transforms.Resize((160, 160)),
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
