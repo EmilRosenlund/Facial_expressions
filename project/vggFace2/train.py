@@ -71,6 +71,8 @@ class VGGFace2WithMLP(nn.Module):
         self.dropout = nn.Dropout(dropout_rate)
         self.backbone = backbone
         self.head = MLPHead(512, hidden_size, num_classes, dropout_rate)
+        print(f"Backbone parameters: {sum(p.numel() for p in self.backbone.parameters())}, Trainable: {sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)}")
+        print(f"Head parameters: {sum(p.numel() for p in self.head.parameters())}, Trainable: {sum(p.numel() for p in self.head.parameters() if p.requires_grad)}")
 
     def forward(self, x):
         x = self.backbone(x)
