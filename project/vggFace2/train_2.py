@@ -3,6 +3,7 @@ import random
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from facenet_pytorch import InceptionResnetV1
 from torchvision import transforms
@@ -19,6 +20,47 @@ def mixup_batch(inputs, labels, alpha=0.3):
     idx = torch.randperm(inputs.size(0)).to(inputs.device)
     mixed = lam * inputs + (1 - lam) * inputs[idx]
     return mixed, labels, labels[idx], lam
+
+
+class SupervisedContrastiveLoss(nn.Module):
+    def __init__(self, temperature=0.07, eps=1e-8):
+        super().__init__()
+        self.temperature = temperature
+        self.eps = eps
+
+    def forward(self, features, labels):
+        features = F.normalize(features, dim=1)
+        labels = labels.contiguous().view(-1, 1)
+        similarity = torch.matmul(features, features.T) / self.temperature
+
+        label_mask = torch.eq(labels, labels.T).float().to(features.device)
+        logits_mask = torch.ones_like(label_mask) - torch.eye(label_mask.size(0), device=features.device)
+        positive_mask = label_mask * logits_mask
+
+        # Numerical stability.
+        similarity = similarity - similarity.max(dim=1, keepdim=True)[0].detach()
+        exp_similarity = torch.exp(similarity) * logits_mask
+        log_prob = similarity - torch.log(exp_similarity.sum(dim=1, keepdim=True) + self.eps)
+
+        positives_per_row = positive_mask.sum(dim=1)
+        valid_rows = positives_per_row > 0
+        if not valid_rows.any():
+            return torch.zeros((), device=features.device)
+
+        mean_log_prob_pos = (positive_mask * log_prob).sum(dim=1)[valid_rows] / positives_per_row[valid_rows]
+        return -mean_log_prob_pos.mean()
+
+
+def forward_with_embeddings(model, inputs):
+    captured = {}
+
+    def capture_fc5_input(_, fc5_input):
+        captured["embeddings"] = fc5_input[0]
+
+    hook = model.head.fc5.register_forward_pre_hook(capture_fc5_input)
+    logits = model(inputs)
+    hook.remove()
+    return logits, captured["embeddings"]
 
 # MLP head for classification
 class MLPHead(nn.Module):
@@ -62,12 +104,17 @@ class VGGFace2WithMLP(nn.Module):
     def __init__(self, hidden_size, num_classes, dropout_rate=0.4):
         super().__init__()
         backbone = InceptionResnetV1(pretrained='vggface2')
-        # Freeze the backbone by default; only the requested blocks will be unfrozen later.
-        for _, param in backbone.named_parameters():
+        # Unfreeze last blocks: last 2 mixed_6 and all mixed_7 layers
+        for name, param in backbone.named_parameters():
             param.requires_grad = False
+        for name, param in backbone.named_parameters():
+            if any([k in name for k in ["block8", "mixed_7a", "mixed_6a", "conv2d_4b", "conv2d_4a"]]):
+                param.requires_grad = True
         self.dropout = nn.Dropout(dropout_rate)
         self.backbone = backbone
         self.head = MLPHead(512, hidden_size, num_classes, dropout_rate)
+        print(f"Backbone parameters: {sum(p.numel() for p in self.backbone.parameters())}, Trainable: {sum(p.numel() for p in self.backbone.parameters() if p.requires_grad)}")
+        print(f"Head parameters: {sum(p.numel() for p in self.head.parameters())}, Trainable: {sum(p.numel() for p in self.head.parameters() if p.requires_grad)}")
 
     def forward(self, x):
         x = self.backbone(x)
@@ -82,7 +129,8 @@ class FER2013ImageDataset(Dataset):
         self.transform = transform
         self.augment = augment
         self.samples = []
-        for expression in ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]:
+        for expression in ["angry", "fear", "sad", "neutral"]:
+        #for expression in ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]:
             data = self.dataset.load_data(split=split, expression=expression)
             for label, img in data:
                 self.samples.append((img.copy(), label))
@@ -110,7 +158,7 @@ class FER2013ImageDataset(Dataset):
     def __getitem__(self, idx):
         img, label = self.samples[idx]
         if self.transform:
-            img = self.transform(img.convert('RGB'))
+            img = self.transform(img)
         return img, label
 
 def smooth_labels(labels, num_classes, smoothing=0.1):
@@ -122,12 +170,14 @@ def smooth_labels(labels, num_classes, smoothing=0.1):
     return smoothed
 
 
-def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device):
+def train(model, train_loader, val_loader, criterion, contrastive_criterion, contrastive_weight, optimizer, scheduler, num_epochs, device):
     best_val_loss = float('inf')
     model.to(device)
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
+        total_ce_loss = 0
+        total_contrastive_loss = 0
         for inputs, labels in train_loader:
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
@@ -135,11 +185,21 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
             mixed_inputs, labels_a, labels_b, lam = mixup_batch(inputs, labels)
             outputs = model(mixed_inputs)
             # No log_softmax here, CrossEntropyLoss expects logits
-            loss = lam * criterion(outputs, labels_a) + (1 - lam) * criterion(outputs, labels_b)
+            ce_loss = lam * criterion(outputs, labels_a) + (1 - lam) * criterion(outputs, labels_b)
+
+            # Contrastive objective on hard labels to force class clusters apart.
+            _, embeddings = forward_with_embeddings(model, inputs)
+            contrastive_loss = contrastive_criterion(embeddings, labels)
+            loss = ce_loss + contrastive_weight * contrastive_loss
+
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+            total_ce_loss += ce_loss.item()
+            total_contrastive_loss += contrastive_loss.item()
         avg_train_loss = total_loss / len(train_loader)
+        avg_ce_loss = total_ce_loss / len(train_loader)
+        avg_contrastive_loss = total_contrastive_loss / len(train_loader)
 
         # Validation
         model.eval()
@@ -152,7 +212,13 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
                 val_loss += loss.item()
         avg_val_loss = val_loss / len(val_loader)
 
-        print(f'Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.4f}, Val Loss: {avg_val_loss:.4f}')
+        print(
+            f'Epoch [{epoch+1}/{num_epochs}], '
+            f'Train Loss: {avg_train_loss:.4f}, '
+            f'CE: {avg_ce_loss:.4f}, '
+            f'Con: {avg_contrastive_loss:.4f}, '
+            f'Val Loss: {avg_val_loss:.4f}'
+        )
         scheduler.step(avg_val_loss)
 
         # Save best checkpoint
@@ -168,7 +234,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
 if __name__ == "__main__":
     hidden_size = 128
     num_classes = 7
-    dropout_rate = 0.5
+    dropout_rate = 0.40
     random_seed = 42
     torch.manual_seed(random_seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -176,56 +242,74 @@ if __name__ == "__main__":
     # Data transforms
     transform = transforms.Compose([
         transforms.Resize((160, 160)),
+        transforms.Grayscale(num_output_channels=3),
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
     ])
     print("Data transforms defined.")
     # Datasets and loaders with 3x augmentation for training
-    print("Building full training dataset...")
     full_train_dataset = FER2013ImageDataset(split="train", transform=transform, augment=True)
-    print(f"Loaded {len(full_train_dataset)} training samples before split.")
     val_split = 0.2
     val_size = int(len(full_train_dataset) * val_split)
     train_size = len(full_train_dataset) - val_size
     train_dataset, val_dataset = torch.utils.data.random_split(full_train_dataset, [train_size, val_size], generator=torch.Generator().manual_seed(random_seed))
-    # Per-class oversampling using WeightedRandomSampler
-    from torch.utils.data import WeightedRandomSampler
-    # Get class counts and sample weights
-    class_counts = torch.tensor([3995, 436, 4097, 7215, 4965, 4830, 3171], dtype=torch.float)
-    sample_weights = 1.0 / class_counts
-    # Assign weight to each sample in the train_dataset
-    print("Collecting labels for sampler...")
-    train_labels = [full_train_dataset.samples[idx][1] for idx in train_dataset.indices]
-    weights = [sample_weights[label] for label in train_labels]
-    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
-    train_loader = DataLoader(train_dataset, batch_size=64, sampler=sampler, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=64, shuffle=False, num_workers=2)
     print(f"Train dataset size: {len(train_dataset)}, Validation dataset size: {len(val_dataset)}")
     # Model
     model = VGGFace2WithMLP(hidden_size, num_classes, dropout_rate)
     print(f"Model initialized. With VGGFace2 backbone and MLP head. and {sum(p.numel() for p in model.parameters())} parameters.")
-    class_counts = torch.tensor([3832, 444, 4096, 7096, 4988, 3324, 4932], dtype=torch.float)
+    class_counts = torch.tensor([3995, 436, 4097, 7215, 4965, 4830, 3171], dtype=torch.float)
     weights = 1.0 / class_counts
     weights = weights / weights.sum() * len(class_counts)
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=weights.to(device))
+    contrastive_criterion = SupervisedContrastiveLoss(temperature=0.07)
+    contrastive_weight = 0.15
 
-    # Unfreeze only 4a, 4b, mixed_6a, mixed_7a, and block8.
-    trainable_backbone_names = ["conv2d_4a", "conv2d_4b", "mixed_6a", "mixed_7a", "block8"]
-    for name, param in model.backbone.named_parameters():
-        if any(block in name for block in trainable_backbone_names):
-            param.requires_grad = True
+        # Early backbone (frozen): lr=0, mid backbone: lr=1e-5, last block: lr=1e-4
+    last_block_names = ["block8", "mixed_7a"]
+    mid_block_names = ["mixed_6a", "conv2d_4b", "conv2d_4a"]
+    # Group parameters
+    last_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in last_block_names)]
+    mid_block_params = [p for n, p in model.backbone.named_parameters() if any(k in n for k in mid_block_names) and not any(k in n for k in last_block_names)]
+    frozen_param_names = [n for n, _ in model.backbone.named_parameters() if not any(k in n for k in (last_block_names + mid_block_names))]
+    frozen_params = [p for n, p in model.backbone.named_parameters() if not any(k in n for k in (last_block_names + mid_block_names))]
+    print("[DEBUG] Last block params unfrozen:")
+    for n, p in model.backbone.named_parameters():
+        if any(k in n for k in last_block_names):
+            print("  ", n)
+    print("[DEBUG] Mid block params unfrozen:")
+    for n, p in model.backbone.named_parameters():
+        if any(k in n for k in mid_block_names) and not any(k in n for k in last_block_names):
+            print("  ", n)
+    print("[DEBUG] Frozen block params:")
+    for n, p in model.backbone.named_parameters():
+        if n in frozen_param_names:
+            print("  ", n)
 
-    # Group only the trainable backbone parameters.
     backbone_param_groups = [
-        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in ["conv2d_4a", "conv2d_4b"])], "lr": 1e-6},
-        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in ["mixed_6a"])], "lr": 1e-5},
-        {"params": [p for n, p in model.backbone.named_parameters() if any(k in n for k in ["mixed_7a", "block8"])], "lr": 5e-4},
+        {"params": frozen_params, "lr": 0},
+        {"params": mid_block_params, "lr": 1e-5},
+        {"params": last_block_params, "lr": 1e-4},
     ]
     optimizer = optim.AdamW(
-        backbone_param_groups + [{"params": model.head.parameters(), "lr": 5e-4}],
+        backbone_param_groups + [
+            {"params": model.head.parameters(), "lr": 1e-4}
+        ],
         weight_decay=5e-4
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     num_epochs = 300
 
-    train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_epochs, device)
+    train(
+        model,
+        train_loader,
+        val_loader,
+        criterion,
+        contrastive_criterion,
+        contrastive_weight,
+        optimizer,
+        scheduler,
+        num_epochs,
+        device,
+    )
