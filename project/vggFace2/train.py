@@ -165,7 +165,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             print(f"New best model found at epoch {epoch+1} with val loss {avg_val_loss:.4f}. Saving model...v6")
-            torch.save(model.state_dict(), "best_model_v7.pth")
+            torch.save(model.state_dict(), "best_model_v8.pth")
 
     save_path = "model.pth"
     torch.save(model.state_dict(), save_path)
@@ -174,7 +174,7 @@ def train(model, train_loader, val_loader, criterion, optimizer, scheduler, num_
 if __name__ == "__main__":
     hidden_size = 128
     num_classes = 7
-    dropout_rate = 0.40
+    dropout_rate = 0.20
     random_seed = 42
     torch.manual_seed(random_seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -199,6 +199,8 @@ if __name__ == "__main__":
     # Model
     model = VGGFace2WithMLP(hidden_size, num_classes, dropout_rate)
     print(f"Model initialized. With VGGFace2 backbone and MLP head. and {sum(p.numel() for p in model.parameters())} parameters.")
+    with torch.no_grad():
+        model.load_state_dict(torch.load("best_model_v7.pth", map_location=device))
     class_counts = torch.tensor([3995, 436, 4097, 7215, 4965, 4830, 3171], dtype=torch.float)
     weights = 1.0 / class_counts
     weights = weights / weights.sum() * len(class_counts)
