@@ -1,17 +1,29 @@
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Fix for macOS OpenMP issues
+
 import torch
 import numpy as np
 from train import VGGFace2WithMLP
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
-import os
+
+import random
+import time
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from torchvision import transforms
 from dataloader import FER2013Dataset
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 # Model and data parameters
 hidden_size = 128  # Should match training
 num_classes = 7
-model_path = "best_model_v6_arcface.pth"
+root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+model_path = r"C:\Users\emilr\Desktop\p8\best_model_v5_face_best.pth"
+sample_count = 20
+samples_root_dir = os.path.join(root_dir, "random_test_samples")
 
 # Data transforms (must match training)
 transform = transforms.Compose([
@@ -23,16 +35,29 @@ transform = transforms.Compose([
 # Load test images and labels
 def load_test_images():
     dataset = FER2013Dataset(debug=False)
+    default_data_path = os.path.join(root_dir, "fer2013")
+    if os.path.exists(default_data_path):
+        dataset.data_path = default_data_path
+
+    originals = []
     images = []
     labels = []
-    for expression, label in zip(["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"], range(num_classes)):
+    for expression, label in zip(class_names, range(num_classes)):
         data = dataset.load_data(split="test", expression=expression)
         for lbl, img in data:
+            originals.append(img.convert('RGB').copy())
             images.append(transform(img.convert('RGB')))
             labels.append(label)
-    return images, labels
+    return originals, images, labels
 
-images, labels = load_test_images()
+class_names = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
+
+orig_images, images, labels = load_test_images()
+if len(images) == 0:
+    raise RuntimeError(
+        f"No test images found. Checked FER2013 path: {os.path.join(root_dir, 'fer2013')}"
+    )
+
 X_test_tensor = torch.stack(images)
 y_test_tensor = torch.tensor(labels, dtype=torch.long)
 
@@ -53,14 +78,17 @@ model.eval()
 
 batch_size = 64
 preds = []
+top_probs = []
 with torch.no_grad():
     for i in range(0, len(X_test_tensor), batch_size):
         batch = X_test_tensor[i:i+batch_size]
         outputs = model(batch)
+        probs = torch.softmax(outputs, dim=1)
         preds.append(torch.argmax(outputs, dim=1).cpu())
+        top_probs.append(torch.max(probs, dim=1).values.cpu())
 preds = torch.cat(preds).numpy()
+top_probs = torch.cat(top_probs).numpy()
 y_true = y_test_tensor.cpu().numpy()
-class_names = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
 
 print("Predicted classes:", np.unique(preds))
 
@@ -71,12 +99,54 @@ precision = precision_score(y_true, preds, average='macro')
 f1 = f1_score(y_true, preds, average='macro')
 report = classification_report(y_true, preds, target_names=class_names)
 cm = confusion_matrix(y_true, preds)
-import time
 
 date_time = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
 filename = f"test_results_{date_time}.txt"
 confusion_image_filename = f"confusion_matrix_{date_time}.png"
+samples_dir = os.path.join(samples_root_dir, f"samples_{date_time}")
+os.makedirs(samples_dir, exist_ok=True)
 print(f"Test results at {date_time.replace('_', ' ')}:")
+
+# Save 20 random test samples with predicted class and probability on the image.
+sample_total = min(sample_count, len(orig_images))
+sample_indices = random.sample(range(len(orig_images)), k=sample_total)
+for i, idx in enumerate(sample_indices, start=1):
+    img = orig_images[idx].copy()
+    pred_label = class_names[preds[idx]]
+    pred_prob = float(top_probs[idx]) * 100.0
+    true_label = class_names[y_true[idx]]
+    text_lines = [
+        f"Pred: {pred_label} ({pred_prob:.2f}%)",
+        f"True: {true_label}",
+    ]
+
+    font = ImageFont.load_default()
+    padding = 8
+
+    # Measure text and create a larger canvas with a footer below the image.
+    measure_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    line_heights = []
+    max_text_w = 0
+    for line in text_lines:
+        left, top, right, bottom = measure_draw.textbbox((0, 0), line, font=font)
+        max_text_w = max(max_text_w, right - left)
+        line_heights.append(bottom - top)
+
+    footer_h = sum(line_heights) + (len(text_lines) - 1) * 4 + 2 * padding
+    canvas_w = max(img.width, max_text_w + 2 * padding)
+    canvas_h = img.height + footer_h
+
+    canvas = Image.new("RGB", (canvas_w, canvas_h), color=(18, 18, 18))
+    canvas.paste(img, ((canvas_w - img.width) // 2, 0))
+
+    draw = ImageDraw.Draw(canvas)
+    y_cursor = img.height + padding
+    for line, h in zip(text_lines, line_heights):
+        draw.text((padding, y_cursor), line, fill=(255, 255, 255), font=font)
+        y_cursor += h + 4
+
+    sample_name = f"sample_{i:02d}_{pred_label}_{pred_prob:.2f}.jpg"
+    canvas.save(os.path.join(samples_dir, sample_name))
 
 # Save confusion matrix as image with class names on both axes
 fig, ax = plt.subplots(figsize=(8, 7))
@@ -97,6 +167,10 @@ with open(filename, "w") as f:
     f.write(f"Precision (macro): {precision:.4f}\n")
     f.write(f"F1 (macro): {f1:.4f}\n\n")
     f.write(report)
+    f.write(f"\nRandom sample outputs: {samples_dir}\n")
 
 print(f"Test results saved to {filename}")
 print(f"Confusion matrix image saved to {confusion_image_filename}")
+print(f"Saved {sample_total} annotated random samples to {samples_dir}")
+
+
