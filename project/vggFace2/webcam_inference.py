@@ -17,7 +17,7 @@ CLASS_NAMES = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"
 HIDDEN_SIZE = 128
 NUM_CLASSES = 7
 TARGET_FPS = 20
-MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "best_model_v5.pth"))
+MODEL_PATH = "best_model_v5.pth"
 
 
 def load_model(device: torch.device) -> torch.nn.Module:

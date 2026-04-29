@@ -1,31 +1,30 @@
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Fix for macOS OpenMP issues
-
 import torch
 import numpy as np
 from train import VGGFace2WithMLP
 from sklearn.metrics import accuracy_score, recall_score, precision_score, f1_score, classification_report, confusion_matrix, ConfusionMatrixDisplay
-
 import random
 import time
 import sys
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from torchvision import transforms
 from dataloader import FER2013Dataset
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
 
 # Model and data parameters
-hidden_size = 128  # Should match training
+hidden_size = 128  
 num_classes = 7
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-model_path = r"C:\Users\emilr\Desktop\p8\best_model_v5_face_best.pth"
-sample_count = 20
+model_path = "best_model_v5.pth"
+model_path = os.path.join(root_dir, model_path)
+data_test_path = "small_test_set"
+sample_count = 10
 samples_root_dir = os.path.join(root_dir, "random_test_samples")
 
-# Data transforms (must match training)
+
+# Data transforms 
 transform = transforms.Compose([
     transforms.Resize((160, 160)),
     transforms.ToTensor(),
@@ -35,10 +34,9 @@ transform = transforms.Compose([
 # Load test images and labels
 def load_test_images():
     dataset = FER2013Dataset(debug=False)
-    default_data_path = os.path.join(root_dir, "fer2013")
+    default_data_path = os.path.join(root_dir, data_test_path)
     if os.path.exists(default_data_path):
         dataset.data_path = default_data_path
-
     originals = []
     images = []
     labels = []
@@ -49,7 +47,6 @@ def load_test_images():
             images.append(transform(img.convert('RGB')))
             labels.append(label)
     return originals, images, labels
-
 class_names = ["angry", "disgust", "fear", "happy", "sad", "surprise", "neutral"]
 
 orig_images, images, labels = load_test_images()
@@ -74,7 +71,7 @@ else:
 model.load_state_dict(state_dict)
 model.eval()
 
-# Predict in batches (avoid OOM)
+# Predict in batches
 
 batch_size = 64
 preds = []
@@ -123,7 +120,7 @@ for i, idx in enumerate(sample_indices, start=1):
     font = ImageFont.load_default()
     padding = 8
 
-    # Measure text and create a larger canvas with a footer below the image.
+    #footer below the image.
     measure_draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     line_heights = []
     max_text_w = 0
@@ -148,7 +145,7 @@ for i, idx in enumerate(sample_indices, start=1):
     sample_name = f"sample_{i:02d}_{pred_label}_{pred_prob:.2f}.jpg"
     canvas.save(os.path.join(samples_dir, sample_name))
 
-# Save confusion matrix as image with class names on both axes
+# Save confusion matrix
 fig, ax = plt.subplots(figsize=(8, 7))
 disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
 disp.plot(ax=ax, cmap="Blues", colorbar=True, values_format="d")
